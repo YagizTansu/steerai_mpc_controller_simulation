@@ -32,6 +32,7 @@ class MPCController:
         # Constraints
         self.v_max = 5.5
         self.delta_max = 0.6
+        self.L = 1.75 # Wheelbase
         
         # Initialize Path Manager
         # Assuming the CSV file is in the data folder of steerai_data_collector
@@ -154,7 +155,22 @@ class MPCController:
             cmd_steer = self.U[1, k]
             
             # Neural Net Prediction
-            next_v_pred, delta_yaw_pred = self.neural_net_dynamics(curr_v, cmd_v, cmd_steer)
+            next_v_nn, delta_yaw_nn = self.neural_net_dynamics(curr_v, cmd_v, cmd_steer)
+            
+            # Kinematic Prediction
+            # Simple kinematic model for low speeds
+            next_v_kin = cmd_v # Assume we track command at low speed
+            delta_yaw_kin = (curr_v / self.L * ca.tan(cmd_steer)) * self.dt
+            
+            # Hybrid Blending
+            # alpha = 0 for v < 0.5 (Pure Kinematic)
+            # alpha = 1 for v > 2.0 (Pure NN)
+            v_low = 0.5
+            v_high = 2.0
+            alpha = ca.fmin(1.0, ca.fmax(0.0, (curr_v - v_low) / (v_high - v_low)))
+            
+            next_v_pred = (1 - alpha) * next_v_kin + alpha * next_v_nn
+            delta_yaw_pred = (1 - alpha) * delta_yaw_kin + alpha * delta_yaw_nn
             
             # Kinematic Update
             next_x = curr_x + curr_v * ca.cos(curr_yaw) * self.dt
@@ -168,7 +184,7 @@ class MPCController:
             self.opti.subject_to(self.X[3, k+1] == next_v)
             
             # Input Constraints
-            self.opti.subject_to(self.opti.bounded(0, self.U[0, k], self.v_max)) # 0 <= cmd_v <= v_max
+            self.opti.subject_to(self.opti.bounded(-self.v_max, self.U[0, k], self.v_max)) # -v_max <= cmd_v <= v_max
             self.opti.subject_to(self.opti.bounded(-self.delta_max, self.U[1, k], self.delta_max))
             
         # Initial Condition Constraint
@@ -176,7 +192,7 @@ class MPCController:
         
         # Solver Options
         p_opts = {'expand': True}
-        s_opts = {'max_iter': 100, 'print_level': 0, 'tol': 1e-3}
+        s_opts = {'max_iter': 500, 'print_level': 0, 'tol': 1e-3}
         self.opti.solver('ipopt', p_opts, s_opts)
         
         # Warm start variables
