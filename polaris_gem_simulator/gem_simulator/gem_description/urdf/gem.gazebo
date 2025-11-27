@@ -371,6 +371,7 @@
 
   <!-- ***************************** stereo camera ***************************** -->
 
+  <!--
   <gazebo reference="stereo_camera_link">
     <sensor type="multicamera" name="stereo_camera">
       <update_rate>30.0</update_rate>
@@ -416,8 +417,6 @@
         <imageTopicName>image_raw</imageTopicName>
         <cameraInfoTopicName>camera_info</cameraInfoTopicName>
         <frameName>stereo_camera_link</frameName>
-        <!--<rightFrameName>right_camera_optical_frame</rightFrameName>-->
-        <!-- <hackBaseline>0.07</hackBaseline> -->
         <hackBaseline>0.5</hackBaseline>
         <distortionK1>0.0</distortionK1>
         <distortionK2>0.0</distortionK2>
@@ -427,6 +426,7 @@
       </plugin>
     </sensor>
   </gazebo>
+  -->
 
   <!-- Sensor providing ground truth Odometry of base_link -->
   <gazebo>
