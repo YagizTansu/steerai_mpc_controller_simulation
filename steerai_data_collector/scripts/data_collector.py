@@ -4,6 +4,8 @@ import rospy
 import math
 import csv
 import time
+import os
+import rospkg
 from ackermann_msgs.msg import AckermannDrive
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
@@ -12,11 +14,19 @@ class DataCollector:
     def __init__(self):
         rospy.init_node('data_collector', anonymous=True)
         
+        # Get package path and create data directory
+        rospack = rospkg.RosPack()
+        package_path = rospack.get_path('steerai_data_collector')
+        data_dir = os.path.join(package_path, 'data')
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+            
         # Parameters
-        self.log_file_path = 'training_data.csv'
-        self.log_frequency = 10.0 # Hz
+        self.log_file_path = os.path.join(data_dir, 'training_data.csv')
+        self.log_frequency = 100.0 # Hz
         self.max_speed = 5.5 # m/s (~20 km/h)
         self.max_steering = 0.6 # rad
+        self.duration = 240.0 # seconds
         
         # State variables
         self.curr_x = 0.0
@@ -90,6 +100,13 @@ class DataCollector:
         while not rospy.is_shutdown():
             current_time = rospy.Time.now().to_sec()
             elapsed_time = current_time - self.start_time
+            
+            if elapsed_time > self.duration:
+                rospy.loginfo("Duration limit reached. Stopping...")
+                break
+            
+            remaining_time = self.duration - elapsed_time
+            rospy.loginfo_throttle(1.0, "Time remaining: %.1f s", remaining_time)
             
             # Calculate commands
             target_speed, target_steering = self.get_excitation_commands(elapsed_time)
