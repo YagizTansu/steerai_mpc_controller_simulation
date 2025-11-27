@@ -7,7 +7,7 @@ Panels:
         - /Global Options1
         - /Marker1
       Splitter Ratio: 0.4746136963367462
-    Tree Height: 406
+    Tree Height: 441
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -25,7 +25,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: Image
+    SyncSource: ""
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
