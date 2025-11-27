@@ -10,6 +10,13 @@ import joblib
 from ackermann_msgs.msg import AckermannDrive
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
+import sys
+import os
+
+# Add current directory to path so we can import path_manager
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from path_manager import PathManager
 
 class MPCController:
     def __init__(self):
@@ -21,11 +28,16 @@ class MPCController:
         # MPC Parameters
         self.T = 10 # Horizon
         self.dt = 0.1 # Time step
-        self.v_ref = 2.0 # Reference speed (m/s)
         
         # Constraints
         self.v_max = 5.5
         self.delta_max = 0.6
+        
+        # Initialize Path Manager
+        # Assuming the CSV file is in the data folder of steerai_data_collector
+        rospack = rospkg.RosPack()
+        path_file = os.path.join(rospack.get_path('steerai_data_collector'), 'data', 'reference_path.csv')
+        self.path_manager = PathManager(path_file)
         
         # Setup CasADi Solver
         self.setup_solver()
@@ -96,21 +108,33 @@ class MPCController:
         self.X = self.opti.variable(4, self.T + 1) # State trajectory
         self.U = self.opti.variable(2, self.T)     # Control trajectory
         
-        # Parameters (Initial State)
-        self.P = self.opti.parameter(4)
+        # Parameters
+        self.P = self.opti.parameter(4) # Initial State
+        self.Ref = self.opti.parameter(4, self.T + 1) # Reference Trajectory [x, y, yaw, v]
         
         # Cost Function
         obj = 0
         for k in range(self.T):
             # State Error
-            # Simple reference: y = 0 (Lane centering)
-            obj += 10.0 * self.X[1, k]**2 # Minimize y (Cross Track Error)
-            obj += 5.0 * self.X[2, k]**2  # Minimize yaw (Heading Error)
-            obj += 1.0 * (self.X[3, k] - self.v_ref)**2 # Maintain reference speed
+            # Minimize distance to reference point
+            x_err = self.X[0, k] - self.Ref[0, k]
+            y_err = self.X[1, k] - self.Ref[1, k]
+            yaw_err = self.X[2, k] - self.Ref[2, k]
+            v_err = self.X[3, k] - self.Ref[3, k]
+            
+            # Normalize yaw error to [-pi, pi]
+            # Note: CasADi doesn't have a direct atan2 for difference, but for small errors it's fine.
+            # Or we can just penalize sin/cos differences if needed.
+            # For now, simple difference is usually okay if the reference is close.
+            
+            obj += 10.0 * (x_err**2 + y_err**2) # Position Error
+            obj += 5.0 * yaw_err**2             # Heading Error
+            obj += 1.0 * v_err**2               # Speed Error
             
             # Control Effort
             if k > 0:
                 obj += 1.0 * (self.U[1, k] - self.U[1, k-1])**2 # Smooth steering
+                obj += 0.1 * (self.U[0, k] - self.U[0, k-1])**2 # Smooth acceleration
                 
         self.opti.minimize(obj)
         
@@ -148,9 +172,7 @@ class MPCController:
         
         # Solver Options
         p_opts = {'expand': True}
-        # Solver Options
-        p_opts = {'expand': True}
-        s_opts = {'max_iter': 500, 'print_level': 0, 'tol': 1e-3}
+        s_opts = {'max_iter': 100, 'print_level': 0, 'tol': 1e-3}
         self.opti.solver('ipopt', p_opts, s_opts)
         
         # Warm start variables
@@ -172,14 +194,24 @@ class MPCController:
     def run(self):
         rate = rospy.Rate(10) # 10 Hz
         
+        rospy.loginfo("MPC Controller: Waiting for state...")
         while not rospy.is_shutdown():
             if self.current_state is None:
+                rospy.logwarn_throttle(2, "MPC Controller: No Odom received yet.")
                 rate.sleep()
                 continue
             
+            # Get Reference Trajectory
+            # We need T+1 points
+            ref_traj = self.path_manager.get_reference(self.current_state[0], self.current_state[1], self.T + 1)
+            
+            # Transpose to match shape (4, T+1)
+            ref_traj = ref_traj.T
+            
             try:
-                # Set Initial State Parameter
+                # Set Parameters
                 self.opti.set_value(self.P, self.current_state)
+                self.opti.set_value(self.Ref, ref_traj)
                 
                 # Warm Start
                 self.opti.set_initial(self.X, self.prev_X)
@@ -194,11 +226,9 @@ class MPCController:
                 cmd_steer = u_opt[1]
                 
                 # Store solution for next warm start
-                # Shift X: [x1, x2, ..., xT, xT]
                 self.prev_X[:, :-1] = sol.value(self.X)[:, 1:]
                 self.prev_X[:, -1] = sol.value(self.X)[:, -1]
                 
-                # Shift U: [u1, u2, ..., uT, uT]
                 self.prev_U[:, :-1] = sol.value(self.U)[:, 1:]
                 self.prev_U[:, -1] = sol.value(self.U)[:, -1]
                 
@@ -208,7 +238,9 @@ class MPCController:
                 msg.steering_angle = cmd_steer
                 self.pub_cmd.publish(msg)
                 
-                # rospy.loginfo(f"MPC Solved: v={cmd_v:.2f}, steer={cmd_steer:.2f}")
+                # Debug Info
+                cte = self.path_manager.get_cross_track_error(self.current_state[0], self.current_state[1])
+                rospy.loginfo_throttle(1, f"MPC: v={cmd_v:.2f}, steer={cmd_steer:.2f}, CTE={cte:.3f}")
                 
             except Exception as e:
                 rospy.logwarn(f"MPC Solver Failed: {e}")
@@ -218,7 +250,7 @@ class MPCController:
                 msg.steering_angle = 0.0
                 self.pub_cmd.publish(msg)
                 
-                # Reset warm start on failure
+                # Reset warm start
                 self.prev_X = np.zeros((4, self.T + 1))
                 self.prev_U = np.zeros((2, self.T))
             
