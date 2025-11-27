@@ -128,7 +128,11 @@ class MPCController:
             # For now, simple difference is usually okay if the reference is close.
             
             obj += 10.0 * (x_err**2 + y_err**2) # Position Error
-            obj += 5.0 * yaw_err**2             # Heading Error
+            # Yaw Error handling wrapping
+            # Minimize 1 - cos(yaw_err) which behaves like yaw_err^2/2 for small errors
+            # but handles wrapping correctly.
+            # Original weight 5.0 * err^2 is roughly 10.0 * (1 - cos(err))
+            obj += 10.0 * (1 - ca.cos(yaw_err)) # Heading Error
             obj += 1.0 * v_err**2               # Speed Error
             
             # Control Effort
@@ -250,8 +254,8 @@ class MPCController:
                 msg.steering_angle = 0.0
                 self.pub_cmd.publish(msg)
                 
-                # Reset warm start
-                self.prev_X = np.zeros((4, self.T + 1))
+                # Reset warm start to current state (better than zeros)
+                self.prev_X = np.tile(self.current_state.reshape(4, 1), (1, self.T + 1))
                 self.prev_U = np.zeros((2, self.T))
             
             rate.sleep()
