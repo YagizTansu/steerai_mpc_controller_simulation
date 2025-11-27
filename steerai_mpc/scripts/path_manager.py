@@ -127,8 +127,6 @@ class PathManager:
 
         except Exception as e:
             rospy.logerr(f"Failed to process path: {e}")
-            import traceback
-            traceback.print_exc()
 
     def get_reference(self, robot_x, robot_y, horizon_size):
         """
