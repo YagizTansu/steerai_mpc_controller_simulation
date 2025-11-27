@@ -193,7 +193,7 @@ class PathManager:
 
     def publish_global_path(self):
         msg = Path()
-        msg.header.frame_id = "odom"
+        msg.header.frame_id = "world"
         msg.header.stamp = rospy.Time.now()
         
         for pt in self.path_data:
@@ -211,7 +211,7 @@ class PathManager:
 
     def publish_target_marker(self, target_pt):
         marker = Marker()
-        marker.header.frame_id = "odom"
+        marker.header.frame_id = "world"
         marker.header.stamp = rospy.Time.now()
         marker.ns = "target_point"
         marker.id = 0
@@ -227,60 +227,3 @@ class PathManager:
         marker.color = ColorRGBA(1.0, 0.0, 0.0, 1.0) # Red
         
         self.target_marker_pub.publish(marker)
-
-if __name__ == '__main__':
-    rospy.init_node('path_manager_test')
-    
-    # Create a dummy CSV for testing
-    import tempfile
-    
-    # Create a figure-8 path or circle
-    t = np.linspace(0, 2*np.pi, 50)
-    x = 10 * np.cos(t)
-    y = 10 * np.sin(t)
-    
-    # Add some duplicates to test cleaning
-    x = np.insert(x, 10, x[10])
-    y = np.insert(y, 10, y[10])
-    
-    df = pd.DataFrame({'x': x, 'y': y})
-    
-    # Use a temporary file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as tmp:
-        df.to_csv(tmp.name, index=False)
-        tmp_path = tmp.name
-        
-    rospy.loginfo(f"Created dummy path at {tmp_path}")
-    
-    try:
-        pm = PathManager(tmp_path)
-        
-        rate = rospy.Rate(10)
-        # Simulate a robot moving near the path
-        sim_idx = 0
-        
-        while not rospy.is_shutdown():
-            # Fake robot position (just following the generated path for test)
-            if pm.path_data is not None:
-                # Move index
-                sim_idx = (sim_idx + 1) % len(pm.path_data)
-                rx, ry = pm.path_data[sim_idx, 0], pm.path_data[sim_idx, 1]
-                
-                # Add some noise
-                rx += 0.5
-                ry -= 0.2
-                
-                ref = pm.get_reference(rx, ry, 10)
-                cte = pm.get_cross_track_error(rx, ry)
-                
-                rospy.loginfo_throttle(1, f"Robot: ({rx:.2f}, {ry:.2f}) | CTE: {cte:.3f} | Target: ({ref[0,0]:.2f}, {ref[0,1]:.2f})")
-                
-                # Republish global path occasionally to ensure it shows up in RViz
-                pm.publish_global_path()
-                
-            rate.sleep()
-            
-    except rospy.ROSInterruptException:
-        pass
-    finally:
-        os.remove(tmp_path)

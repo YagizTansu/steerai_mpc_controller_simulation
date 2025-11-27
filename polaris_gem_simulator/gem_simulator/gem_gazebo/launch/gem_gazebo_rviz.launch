@@ -77,6 +77,9 @@
     
     <node name="gem_cmdvel_$(arg robot_name)" pkg="gem_gazebo" type="gem_cmdvel.py" />
     
+    <!-- TF Broadcaster for world frame -->
+    <node name="tf_broadcaster_$(arg robot_name)" pkg="steerai_mpc" type="tf_broadcaster.py" output="screen"/>
+    
     <node if="$(arg use_rviz)" name="rviz_$(arg robot_name)" pkg="rviz" type="rviz" args="-d $(find gem_description)/config_rviz/gem_gazebo_rviz.rviz" />
 
       
