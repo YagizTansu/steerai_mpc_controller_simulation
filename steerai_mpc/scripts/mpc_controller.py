@@ -11,7 +11,6 @@ from ackermann_msgs.msg import AckermannDrive
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
 import sys
-import os
 
 # Add current directory to path so we can import path_manager
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +25,7 @@ class MPCController:
         self.load_model()
         
         # MPC Parameters
-        self.T = 10 # Horizon
+        self.T = 15 # Horizon
         self.dt = 0.1 # Time step
         
         # Constraints
@@ -192,7 +191,14 @@ class MPCController:
         
         # Solver Options
         p_opts = {'expand': True}
-        s_opts = {'max_iter': 500, 'print_level': 0, 'tol': 1e-3}
+        s_opts = {
+            'max_iter': 1000,             # 3000 çok fazla, 1000 yeter.
+            'print_level': 0,
+            'tol': 1e-3,
+            'acceptable_tol': 1e-1,       # Toleransı gevşek tut
+            'acceptable_iter': 10,
+            'max_cpu_time': 0.08          # EKLE: 0.1s (10Hz) dolmadan işlemi kes.
+        }
         self.opti.solver('ipopt', p_opts, s_opts)
         
         # Warm start variables
@@ -263,16 +269,21 @@ class MPCController:
                 rospy.loginfo_throttle(1, f"MPC: v={cmd_v:.2f}, steer={cmd_steer:.2f}, CTE={cte:.3f}")
                 
             except Exception as e:
-                rospy.logwarn(f"MPC Solver Failed: {e}")
-                # Stop on failure
-                msg = AckermannDrive()
-                msg.speed = 0.0
-                msg.steering_angle = 0.0
-                self.pub_cmd.publish(msg)
+                rospy.logwarn_throttle(1, f"MPC Solver Timeout (Recovering...)")                                                
+                x0, y0, th0, v0 = self.current_state
                 
-                # Reset warm start to current state (better than zeros)
-                self.prev_X = np.tile(self.current_state.reshape(4, 1), (1, self.T + 1))
-                self.prev_U = np.zeros((2, self.T))
+                new_prev_X = np.zeros((4, self.T + 1))
+                new_prev_U = np.zeros((2, self.T))
+                
+                # Gelecekteki T adımı basitçe tahmin et (x = x + v*t)
+                for k in range(self.T + 1):
+                    new_prev_X[0, k] = x0 + v0 * k * self.dt * np.cos(th0)
+                    new_prev_X[1, k] = y0 + v0 * k * self.dt * np.sin(th0)
+                    new_prev_X[2, k] = th0
+                    new_prev_X[3, k] = v0
+                
+                self.prev_X = new_prev_X
+                self.prev_U = new_prev_U # Komutları sıfırla
             
             rate.sleep()
 
