@@ -35,7 +35,7 @@ mpc:
   # Longer horizon = better long-term planning but slower solver
   # With dt=0.1, T=10 means 1 second lookahead
   # FIRST-STEP NN: Increased to 12 for better path tracking
-  horizon: 15
+  horizon: 25
   
   # Time step (seconds)
   # Range: 0.01 - 0.5
@@ -56,7 +56,7 @@ weights:
   # Too high: aggressive path following, can cause oscillations in turns
   # Too low: vehicle may drift away from path
   # INCREASED for better path tracking
-  position: 10.0
+  position: 2.0
   
   # Heading error weight  
   # Range: 0.0 - 100.0
@@ -65,7 +65,7 @@ weights:
   # Too high: vehicle rigidly follows path orientation, may cause jerky motion
   # Too low: vehicle may not align properly with path, especially in curves
   # REDUCED slightly to balance with position weight
-  heading: 5.0
+  heading: 1.0
   
   # Velocity error weight
   # Range: 0.0 - 100.0
@@ -133,7 +133,7 @@ solver:
   # Range: 0.01 - 1.0
   # Default: 0.09 (90ms)
   # OPTIMIZED: Can be lower now since NN only in first step
-  max_cpu_time: 0.15
+  max_cpu_time: 0.25
 
 # ============================================================================
 # HYBRID DYNAMICS BLENDING
@@ -163,7 +163,7 @@ control:
   # Default: 5.556 m/s (20 km/h - project requirement)
   # This is the desired speed the MPC will try to maintain
   # Note: Must be <= v_max (vehicle constraint)
-  target_speed: 2.0
+  target_speed: 1.0
   
   # Goal reached tolerance (meters)
   # Range: 0.1 - 2.0
