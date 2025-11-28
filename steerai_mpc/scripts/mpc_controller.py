@@ -35,10 +35,8 @@ class MPCController:
         )
         
         self.path_manager = PathManager(param_namespace='~path_manager')
-        
-        # Calculate velocity profile immediately if path is loaded
-        if self.path_manager.path_data is not None:
-            self.path_manager.calculate_velocity_profile(self.target_speed)
+        # Set initial target speed
+        self.path_manager.set_target_speed(self.target_speed)
         
         # Prepare solver parameters
         solver_params = {
@@ -144,9 +142,9 @@ class MPCController:
         self.target_speed = config.target_speed
         if abs(old_speed - config.target_speed) > 0.01:
             rospy.loginfo(f"Target speed updated: {old_speed:.2f} -> {config.target_speed:.2f} m/s")
-            # Recalculate velocity profile
+            # Update PathManager
             if hasattr(self, 'path_manager'):
-                self.path_manager.calculate_velocity_profile(self.target_speed)
+                self.path_manager.set_target_speed(self.target_speed)
         
         self.goal_tolerance = config.goal_tolerance
         
@@ -214,6 +212,12 @@ class MPCController:
                 rate.sleep()
                 continue
             
+            # Check if path is available
+            if self.path_manager.path_data is None:
+                rospy.logwarn_throttle(5, "MPC Controller: Waiting for path on /gem/raw_path...")
+                rate.sleep()
+                continue
+
             # Check goal
             if self.path_manager.is_goal_reached(self.current_state[0], self.current_state[1], self.goal_tolerance):
                 rospy.loginfo_throttle(1, "🎯 Goal Reached! Stopping vehicle.")
@@ -241,8 +245,7 @@ class MPCController:
                 predicted_state[0], 
                 predicted_state[1], 
                 self.T + 1, 
-                self.dt, 
-                self.target_speed
+                self.dt
             )
             
             # Transpose to match shape (4, T+1) for solver

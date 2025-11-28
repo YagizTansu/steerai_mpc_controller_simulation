@@ -10,68 +10,38 @@ from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 from visualization_msgs.msg import Marker
 from std_msgs.msg import ColorRGBA
+from tf.transformations import euler_from_quaternion
 
 class PathManager:
-    def __init__(self, path_file=None, param_namespace='~path_manager'):
+    def __init__(self, param_namespace='~path_manager'):
         """
         Initialize PathManager.
-        :param path_file: Absolute path to the CSV file (overrides parameter server)
-        :param param_namespace: ROS parameter namespace (default: '~path_manager')
+        Subscribes to raw path topic and processes it.
         """
-        # Load parameters from parameter server
         self.param_namespace = param_namespace
-        self.load_parameters(path_file)
+        
+        # Load parameters
+        self.load_parameters()
         
         self.path_data = None # [x, y, yaw]
         self.path_velocities = None # [v]
         self.tree = None
+        self.target_speed = 5.0 # Default, will be updated by controller
         
-        # Publisher for global path visualization
+        # Publisher for processed global path visualization
         if self.publish_path:
             self.global_path_pub = rospy.Publisher('/gem/global_path', Path, queue_size=1, latch=True)
             self.target_marker_pub = rospy.Publisher('/gem/target_point', Marker, queue_size=1)
         else:
             self.global_path_pub = None
             self.target_marker_pub = None
-        
-        # Load and process path
-        self.load_and_process_path()
-        
-        # Publish global path once ready
-        if self.path_data is not None and self.global_path_pub is not None:
-            self.publish_global_path()
+            
+        # Subscriber for raw path
+        self.raw_path_sub = rospy.Subscriber('/gem/raw_path', Path, self.raw_path_callback)
+        rospy.loginfo("PathManager: Waiting for path on /gem/raw_path ...")
     
-    def load_parameters(self, path_file_override=None):
-        """
-        Load parameters from ROS parameter server with fallback defaults.
-        :param path_file_override: If provided, overrides parameter server path
-        """
-        # Path file
-        if path_file_override is not None:
-            self.path_file = path_file_override
-        else:
-            # Try to get from parameter server
-            param_name = self.param_namespace + '/path/file'
-            if rospy.has_param(param_name):
-                self.path_file = rospy.get_param(param_name)
-                # Expand ROS package paths like $(find package_name)
-                import re
-                match = re.search(r'\$\(find ([^\)]+)\)', self.path_file)
-                if match:
-                    package_name = match.group(1)
-                    import rospkg
-                    rospack = rospkg.RosPack()
-                    try:
-                        package_path = rospack.get_path(package_name)
-                        self.path_file = self.path_file.replace(
-                            f'$(find {package_name})', package_path
-                        )
-                    except rospkg.ResourceNotFound:
-                        rospy.logerr(f"Package {package_name} not found!")
-            else:
-                rospy.logwarn(f"Parameter {param_name} not found, no path file specified!")
-                self.path_file = None
-        
+    def load_parameters(self):
+        """Load parameters from ROS parameter server."""
         # Interpolation parameters
         self.interpolation_smoothness = rospy.get_param(
             self.param_namespace + '/interpolation/smoothness', 0.0)
@@ -89,87 +59,44 @@ class PathManager:
             self.param_namespace + '/visualization/frame_id', 'world')
         self.publish_path = rospy.get_param(
             self.param_namespace + '/visualization/publish_path', True)
-        
-        # Validate parameters
-        self._validate_parameters()
-        
-        rospy.loginfo(f"PathManager parameters loaded from {self.param_namespace}")
-    
-    def _validate_parameters(self):
-        """Validate loaded parameters and warn if out of range."""
-        # Validate interpolation smoothness
-        if not (0.0 <= self.interpolation_smoothness <= 10.0):
-            rospy.logwarn(f"interpolation_smoothness={self.interpolation_smoothness} "
-                         f"out of range [0.0, 10.0], clamping")
-            self.interpolation_smoothness = max(0.0, min(10.0, self.interpolation_smoothness))
-        
-        # Validate interpolation degree
-        if not (1 <= self.interpolation_degree <= 5):
-            rospy.logwarn(f"interpolation_degree={self.interpolation_degree} "
-                         f"out of range [1, 5], clamping")
-            self.interpolation_degree = max(1, min(5, self.interpolation_degree))
-        
-        # Validate interpolation resolution
-        if not (0.01 <= self.interpolation_resolution <= 1.0):
-            rospy.logwarn(f"interpolation_resolution={self.interpolation_resolution} "
-                         f"out of range [0.01, 1.0], clamping")
-            self.interpolation_resolution = max(0.01, min(1.0, self.interpolation_resolution))
-        
-        # Validate duplicate threshold
-        if not (0.0 <= self.duplicate_threshold <= 0.5):
-            rospy.logwarn(f"duplicate_threshold={self.duplicate_threshold} "
-                         f"out of range [0.0, 0.5], clamping")
-            self.duplicate_threshold = max(0.0, min(0.5, self.duplicate_threshold))
+            
+    def set_target_speed(self, speed):
+        """Update target speed and recalculate profile if path exists."""
+        self.target_speed = speed
+        if self.path_data is not None:
+            self.calculate_velocity_profile()
 
-    def load_and_process_path(self):
+    def raw_path_callback(self, msg):
+        """Callback for raw path message."""
+        rospy.loginfo(f"PathManager: Received new path with {len(msg.poses)} points.")
+        
+        try:
+            # Extract points
+            points = []
+            for pose in msg.poses:
+                points.append([pose.pose.position.x, pose.pose.position.y])
+            
+            points = np.array(points)
+            
+            # Process the path
+            self.process_path(points)
+            
+        except Exception as e:
+            rospy.logerr(f"PathManager: Failed to process incoming path: {e}")
+
+    def process_path(self, points):
         """
-        Loads CSV, removes duplicates, interpolates, and builds KDTree.
+        Removes duplicates, interpolates, and builds KDTree from points array.
         """
-        if not os.path.exists(self.path_file):
-            rospy.logerr(f"Path file not found: {self.path_file}")
+        if len(points) < 2:
+            rospy.logerr("Path must have at least 2 points.")
             return
 
         try:
-            # 1. Load Data
-            # Handle headers or no headers. Assume if 'x' is in columns, it has headers.
-            # Otherwise assume first two columns are x, y.
-            try:
-                df = pd.read_csv(self.path_file)
-                
-                # Check for various column names
-                if 'x' in df.columns and 'y' in df.columns:
-                    points = df[['x', 'y']].values
-                elif 'curr_x' in df.columns and 'curr_y' in df.columns:
-                    points = df[['curr_x', 'curr_y']].values
-                else:
-                    # If headers don't match known names, try reading without header
-                    # But first check if the first row looks like strings
-                    df_no_header = pd.read_csv(self.path_file, header=None)
-                    # Try to convert to float
-                    try:
-                        points = df_no_header.iloc[:, 0:2].astype(float).values
-                    except ValueError:
-                        # If conversion fails, maybe the first row was a header we didn't recognize
-                        # Try skipping the first row
-                        points = df_no_header.iloc[1:, 0:2].astype(float).values
-                        
-                # Ensure points are float
-                points = np.array(points, dtype=float)
-                
-            except Exception as e:
-                rospy.logerr(f"Error reading CSV: {e}")
-                return
-
-            if len(points) < 2:
-                rospy.logerr("Path must have at least 2 points.")
-                return
-
-            # 2. Cleaning: Remove duplicate points
-            # Calculate distance between consecutive points
+            # 1. Cleaning: Remove duplicate points
             diffs = np.diff(points, axis=0)
             dists = np.linalg.norm(diffs, axis=1)
-            # Keep first point, and any point where distance to previous > duplicate_threshold
-            # We reconstruct the array.
+            
             clean_points = [points[0]]
             for i in range(len(dists)):
                 if dists[i] > self.duplicate_threshold:
@@ -180,22 +107,18 @@ class PathManager:
                 rospy.logerr("Path has too few points after cleaning.")
                 return
 
-            # 3. Interpolation (B-spline)
+            # 2. Interpolation (B-spline)
             # splprep requires a list of arrays [x_coords, y_coords]
-            # Use loaded interpolation parameters
             tck, u = splprep(points.T, s=self.interpolation_smoothness, k=self.interpolation_degree)
             
             # Generate dense path
-            # Calculate total length to estimate number of points based on resolution
-            # Simple Euclidean sum
             total_dist = np.sum(np.linalg.norm(np.diff(points, axis=0), axis=1))
             num_points = int(total_dist / self.interpolation_resolution)
             u_new = np.linspace(0, 1, num_points)
             
             x_new, y_new = splev(u_new, tck)
             
-            # 4. Calculate Yaw
-            # np.arctan2(dy, dx)
+            # 3. Calculate Yaw
             dx = np.gradient(x_new)
             dy = np.gradient(y_new)
             yaw_new = np.arctan2(dy, dx)
@@ -206,17 +129,19 @@ class PathManager:
             # Build KDTree
             self.tree = KDTree(self.path_data[:, :2])
             
-            rospy.loginfo(f"Path loaded and smoothed successfully.")
-            rospy.loginfo(f"Original points: {len(points)}, Interpolated points: {len(self.path_data)}")
+            # Calculate Velocity Profile
+            self.calculate_velocity_profile()
+            
+            # Publish Processed Path
+            if self.global_path_pub is not None:
+                self.publish_global_path()
+            
+            rospy.loginfo(f"Path processed successfully. Interpolated points: {len(self.path_data)}")
 
         except Exception as e:
             rospy.logerr(f"Failed to process path: {e}")
 
     def get_path_data(self):
-        """
-        Returns the processed path data.
-        :return: Numpy array of shape (N, 3) -> [x, y, yaw] or None if not loaded
-        """
         return self.path_data
 
     def publish_global_path(self):
@@ -234,10 +159,10 @@ class PathManager:
             
         self.global_path_pub.publish(msg)
 
-    def calculate_velocity_profile(self, target_speed):
+    def calculate_velocity_profile(self):
         """
         Calculates a velocity profile for the path based on curvature.
-        v = sqrt(a_lat_max / curvature)
+        Uses self.target_speed.
         """
         if self.path_data is None or len(self.path_data) < 3:
             return
@@ -251,70 +176,57 @@ class PathManager:
         dx = np.diff(x)
         dy = np.diff(y)
         dists = np.sqrt(dx**2 + dy**2)
-        dists = np.maximum(dists, 1e-6) # Avoid division by zero
+        dists = np.maximum(dists, 1e-6)
         
-        # Calculate curvature (change in yaw per meter)
-        # Note: yaw is already in radians
+        # Calculate curvature
         dyaw = np.diff(yaw)
-        
-        # Handle yaw wrapping (-pi to pi)
         dyaw = (dyaw + np.pi) % (2 * np.pi) - np.pi
-        
         curvature = np.abs(dyaw / dists)
-        
-        # Pad curvature to match length
         curvature = np.append(curvature, curvature[-1])
         
-        # Calculate max velocity based on lateral acceleration limit
-        # a_lat = v^2 * k  ->  v = sqrt(a_lat / k)
-        a_lat_max = 1.0  # m/s^2 (Conservative limit for stability)
-        
+        # Calculate max velocity
+        a_lat_max = 1.0
         v_profile = np.sqrt(a_lat_max / (curvature + 1e-6))
         
         # Clamp velocities
-        v_min = 1.0 # Minimum speed to prevent stopping
-        v_max = target_speed
+        v_min = 1.0
+        v_max = self.target_speed
         
         v_profile = np.clip(v_profile, v_min, v_max)
         
-        # Smooth the velocity profile (Moving average)
+        # Smooth
         window_size = 5
         kernel = np.ones(window_size) / window_size
         v_profile = np.convolve(v_profile, kernel, mode='same')
         
         self.path_velocities = v_profile
-        rospy.loginfo("Velocity profile generated based on curvature.")
+        rospy.loginfo(f"Velocity profile generated with max speed {self.target_speed:.2f} m/s.")
         
-    def get_reference(self, robot_x, robot_y, horizon_size, dt, target_speed):
+    def get_reference(self, robot_x, robot_y, horizon_size, dt):
         """
-        Finds the nearest point and returns the next N points with MPC's target velocity.
+        Finds the nearest point and returns the next N points.
         """
         if self.tree is None:
             return np.zeros((horizon_size, 4))
 
-        # Query KDTree for nearest neighbor
+        # Query KDTree
         dist, idx = self.tree.query([robot_x, robot_y])
         
-        # Initialize reference trajectory list
         ref_traj_list = []
-        
-        # Start from the nearest point
         curr_idx = idx
         
-        # Add the first point (k=0)
+        # First point
         first_pt = self.path_data[curr_idx]
-        first_v = self.path_velocities[curr_idx] if self.path_velocities is not None else target_speed
+        first_v = self.path_velocities[curr_idx] if self.path_velocities is not None else self.target_speed
         ref_traj_list.append(np.append(first_pt, first_v))
         
-        # Loop to find subsequent points based on distance
+        # Subsequent points
         for _ in range(horizon_size - 1):
-            # Determine distance to travel for this step: dt * v
-            current_ref_v = self.path_velocities[curr_idx] if self.path_velocities is not None else target_speed
+            current_ref_v = self.path_velocities[curr_idx] if self.path_velocities is not None else self.target_speed
             target_dist = dt * current_ref_v
             
             accumulated_dist = 0.0
             
-            # Advance along the path until we cover the target distance
             while accumulated_dist < target_dist and curr_idx < len(self.path_data) - 1:
                 p1 = self.path_data[curr_idx]
                 p2 = self.path_data[curr_idx + 1]
@@ -323,15 +235,12 @@ class PathManager:
                 accumulated_dist += seg_dist
                 curr_idx += 1
             
-            # Add the point we landed on
             pt = self.path_data[curr_idx]
-            v = self.path_velocities[curr_idx] if self.path_velocities is not None else target_speed
+            v = self.path_velocities[curr_idx] if self.path_velocities is not None else self.target_speed
             ref_traj_list.append(np.append(pt, v))
             
-        # Convert to numpy array
-        ref_path = np.array(ref_traj_list) # Shape: (horizon_size, 4)
+        ref_path = np.array(ref_traj_list)
         
-        # Visualize the target point
         self.publish_target_marker(ref_path[0])
         
         return ref_path
