@@ -190,6 +190,25 @@ class PathManager:
         cross_prod = np.cos(yaw) * dy - np.sin(yaw) * dx
         
         return cross_prod # Signed distance
+    
+    def is_goal_reached(self, robot_x, robot_y, tolerance=0.5):
+        """
+        Check if robot has reached the final goal.
+        :param robot_x: Robot X position
+        :param robot_y: Robot Y position
+        :param tolerance: Distance threshold in meters (default: 0.5m)
+        :return: True if goal reached, False otherwise
+        """
+        if self.path_data is None or len(self.path_data) == 0:
+            return False
+        
+        # Get final point
+        final_point = self.path_data[-1, :2]
+        
+        # Calculate distance to final point
+        dist = np.sqrt((robot_x - final_point[0])**2 + (robot_y - final_point[1])**2)
+        
+        return dist < tolerance
 
     def publish_global_path(self):
         msg = Path()

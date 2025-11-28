@@ -30,7 +30,7 @@ class MPCController:
         self.L = 1.75 # Wheelbase
 
         # MPC Parameters
-        self.T = 15 # Horizon
+        self.T = 20 # Horizon (2 seconds lookahead - balance between turn prediction and solver speed)
         self.dt = 0.1 # Time step
         
         # MPC Cost Function Weights (Ağırlıklar)
@@ -53,11 +53,20 @@ class MPCController:
         # Direksiyon Yumuşatma Ağırlığı: Ardışık direksiyon komutları arasındaki farkı cezalandırır
         # Yüksek değer = Daha yumuşak direksiyon, ama dönüşlerde yavaş tepki verebilir
         # ARTIRILDI: 1.0 → 10.0 (Ani direksiyon değişimlerini ÇOK DAHA FAZLA cezalandır!)
-        self.weight_steering_smooth = 10.0
+        self.weight_steering_smooth = 5.0
         
         # Gaz/Fren Yumuşatma Ağırlığı: Ardışık hız komutları arasındaki farkı cezalandırır
         # Yüksek değer = Daha yumuşak ivmelenme/yavaşlama
         self.weight_acceleration_smooth = 0.1
+        
+        # Solver Parameters (IPOPT)
+        # Bu parametreler solver'ın hızını ve kalitesini kontrol eder
+        self.solver_max_iter = 900              # Maksimum iterasyon sayısı
+        self.solver_print_level = 0             # Log seviyesi (0 = sessiz)
+        self.solver_tol = 1e-2                  # Optimality toleransı (daha gevşek = daha hızlı)
+        self.solver_acceptable_tol = 2e-1       # Kabul edilebilir tolerans (daha gevşek)
+        self.solver_acceptable_iter = 5         # Kabul edilebilir iterasyon sayısı
+        self.solver_max_cpu_time = 0.09         # Maksimum CPU süresi (saniye)
         
         # Initialize Path Manager
         # Assuming the CSV file is in the data folder of steerai_data_collector
@@ -218,12 +227,12 @@ class MPCController:
         # Solver Options
         p_opts = {'expand': True}
         s_opts = {
-            'max_iter': 1000,             # 3000 çok fazla, 1000 yeter.
-            'print_level': 0,
-            'tol': 1e-3,
-            'acceptable_tol': 1e-1,       # Toleransı gevşek tut
-            'acceptable_iter': 10,
-            'max_cpu_time': 0.08          # EKLE: 0.1s (10Hz) dolmadan işlemi kes.
+            'max_iter': self.solver_max_iter,
+            'print_level': self.solver_print_level,
+            'tol': self.solver_tol,
+            'acceptable_tol': self.solver_acceptable_tol,
+            'acceptable_iter': self.solver_acceptable_iter,
+            'max_cpu_time': self.solver_max_cpu_time
         }
         self.opti.solver('ipopt', p_opts, s_opts)
         
@@ -250,6 +259,17 @@ class MPCController:
         while not rospy.is_shutdown():
             if self.current_state is None:
                 rospy.logwarn_throttle(2, "MPC Controller: No Odom received yet.")
+                rate.sleep()
+                continue
+            
+            # Check if goal is reached
+            if self.path_manager.is_goal_reached(self.current_state[0], self.current_state[1]):
+                rospy.loginfo_throttle(1, "🎯 Goal Reached! Stopping vehicle.")
+                # Send stop command
+                msg = AckermannDrive()
+                msg.speed = 0.0
+                msg.steering_angle = 0.0
+                self.pub_cmd.publish(msg)
                 rate.sleep()
                 continue
             
