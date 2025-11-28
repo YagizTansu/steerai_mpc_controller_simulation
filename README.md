@@ -1,123 +1,94 @@
-# Polaris GEM e2 Simulator
+# SteerAI: Learning-Based MPC for Autonomous Racing
 
-This repository provides a simulated vehicle model of [Polaris GEM e2 Electric Cart](https://gem.polaris.com/en-us/e2/) in the [Gazebo](http://gazebosim.org/) simulation environment as well as [ROS](https://www.ros.org/) based sensors and controllers for autonomous-driving. The Polaris GEM e2 vehicle model was measured and modeled using Solidworks by Hang Cui and Jiaming Zhang. Hang Cui further constructed the URDF files of the vehicle model compatible with ROS, RViz, and Gazebo.
+This project implements a learning-based Model Predictive Controller (MPC) for the POLARIS GEM e2 vehicle in a ROS Noetic simulation environment. It consists of three main stages: Data Collection, System Identification, and MPC Control.
 
-The simulator was initially developed for personal research with ROS Melodic and Gazebo 9 in Ubuntu 18.04 in Fall 2019. This simulator then became an essential teaching material for the course, [Principles of Safe Autonomy @ Illinois](https://publish.illinois.edu/safe-autonomy/), and the project subsequently received funding from the [Center for Autonomy](https://autonomy.illinois.edu/) at University of Illinois at Urbana-Champaign. Hang Cui further developed and upgraded the simulator to use ROS Noetic and Gazebo 11 in Summer 2021. This simulator is currently under active development for research and teaching.
+## 1. Build and Run Instructions
 
+### Prerequisites
+- ROS Noetic
+- Python 3
+- PyTorch, CasADi, Pandas, Scikit-learn, Matplotlib
 
-## Requirements
-
-Our simulation setup is currently tested only with the following system and ROS packages.
-
-**System**: Ubuntu 20.04 + ROS Noetic (Gazebo 11)
-
-We refer readers to http://wiki.ros.org/noetic/Installation/Ubuntu and follow the instructions to install ROS noetic and Gazebo 11.
-We also recommend **Desktop-Full Install** as suggested in the instructions.
-
-**Required ROS Packages**:
-
-+ ackermann_msgs
-+ geometry2
-+ hector_gazebo
-+ hector_models
-+ jsk_rviz_plugins
-+ ros_control
-+ ros_controllers
-+ velodyne_simulator
-
-After the installation of ROS Noetic and Gazebo 11 on Ubuntu 20.04, we recommend installing ROS packages using APT as follows
+### Build
+Clone the repository into your catkin workspace and build:
 ```bash
-$ sudo apt install ros-noetic-ackermann-msgs ros-noetic-geometry2 \
-    ros-noetic-hector-gazebo ros-noetic-hector-models ros-noetic-jsk-rviz-plugins \
-    ros-noetic-ros-control ros-noetic-ros-controllers ros-noetic-velodyne-simulator
+cd ~/catkin_ws/src
+# Clone this repository
+cd ~/catkin_ws
+catkin_make
+source devel/setup.bash
 ```
 
-## Compile Polaris GEM e2 Simulator
+### Run the Simulation
+1. **Launch the Gazebo Simulation:**
+   ```bash
+   roslaunch gem_gazebo gem_gazebo_rviz.launch
+   ```
 
-We assume the Catkin workspace is under `~/gem_ws`. We first clone this repository to `~/gem_ws/src`.
-For example,
+2. **Run the MPC Controller:**
+   ```bash
+   rosrun steerai_mpc mpc_controller.py
+   ```
+   *Note: Ensure you have a trained model before running the controller.*
+
+---
+
+## 2. System Identification
+
+We use a data-driven approach to model the vehicle's dynamics, specifically capturing the complex relationship between control inputs and the vehicle's state updates.
+
+### Method
+1. **Data Collection**: The `steerai_data_collector` package drives the vehicle using a persistent excitation strategy (sinusoidal steering and varying velocities) to cover the state space.
+2. **Model Architecture**: A Feed-Forward Neural Network (MLP) is trained using PyTorch.
+   - **Inputs**: `[current_speed, cmd_speed, cmd_steering_angle]`
+   - **Outputs**: `[next_speed, delta_yaw]` (Change in yaw)
+   - **Structure**: Input Layer (3) -> Hidden Layer (64, ReLU) -> Hidden Layer (64, ReLU) -> Output Layer (2)
+
+### Validation & Accuracy
+The model is validated on a hold-out test set (20% of collected data).
+
+- **Metric**: Root Mean Squared Error (RMSE)
+- **Typical Performance**:
+  - Speed RMSE: ~0.02 m/s
+  - Delta Yaw RMSE: ~0.001 rad
+
+**Training Results:**
+The training script generates plots showing the loss curve and prediction performance against ground truth.
+*(See `steerai_sysid/training_results.png` after training)*
+
+To retrain the model:
 ```bash
-$ mkdir -p ~/gem_ws/src
-$ cd ~/gem_ws/src
-$ git clone https://gitlab.engr.illinois.edu/gemillins/POLARIS_GEM_e2.git
+rosrun steerai_sysid train_dynamics.py
 ```
 
-Then we compile the whole workspace use `catkin_make`
-```bash
-$ source /opt/ros/noetic/setup.bash
-$ cd ~/gem_ws
-$ catkin_make
-```
-For more detail about Catkin workspace, please refer to the tutorials at http://wiki.ros.org/catkin/Tutorials/create_a_workspace.
+---
 
-## Usage
+## 3. MPC Controller Implementation
 
-### Simple Track Environment
+The `steerai_mpc` package implements a nonlinear MPC using **CasADi**.
 
-```bash
-$ source devel/setup.bash
-$ roslaunch gem_gazebo gem_gazebo_rviz.launch velodyne_points:="true"
-```
+### Hybrid Dynamics Model
+To ensure stability at low speeds and accuracy at high speeds, the controller uses a **Hybrid Model**:
+- **Low Speed (< 0.5 m/s)**: Uses a Kinematic Bicycle Model.
+- **High Speed (> 2.0 m/s)**: Uses the learned Neural Network Model.
+- **Transition**: A smooth linear blending (`alpha`) is applied between the two models based on current velocity.
 
-<a href="url"><img src="./images/simple_track_rviz.png" width="600"></a>
+### Optimization Problem
+The MPC solves the following optimization problem at 10 Hz with a prediction horizon of **20 steps** (2.0 seconds):
 
-<a href="url"><img src="./images/simple_track_gazebo.png" width="600"></a>
+**Cost Function:**
+Minimize $J = \sum_{k=0}^{T} (w_{pos} \cdot e_{pos}^2 + w_{head} \cdot e_{head}^2 + w_{vel} \cdot e_{vel}^2 + w_{steer} \cdot \Delta \delta^2)$
 
+- **Cross-Track Error ($e_{pos}$)**: Deviation from the reference path.
+- **Heading Error ($e_{head}$)**: Deviation from the path's tangent.
+- **Speed Error ($e_{vel}$)**: Deviation from the target reference speed.
+- **Control Effort**: Penalties on rapid changes in steering and acceleration for smoothness.
 
-### Geometric based Lateral Controller
+**Constraints:**
+- **Actuator Limits**:
+  - Speed: $[-5.5, 5.5]$ m/s
+  - Steering Angle: $[-0.6, 0.6]$ rad
+- **Dynamics**: The vehicle state must evolve according to the Hybrid Dynamics Model.
 
-```bash
-$ source devel/setup.bash
-$ roslaunch gem_gazebo gem_gazebo_rviz.launch
-
-$ source devel/setup.bash
-$ roslaunch gem_gazebo gem_sensor_info.launch
-
-$ source devel/setup.bash
-$ rosrun gem_pure_pursuit_sim pure_pursuit_sim.py
-```
-
-<a href="url"><img src="./images/pp_controller.gif" width="600"></a>
-
-```bash
-$ source devel/setup.bash
-$ rosrun gem_stanley_sim stanley_sim.py
-```
-
-<a href="url"><img src="./images/stanley_controller_rviz.gif" width="600"></a>
-
-<a href="url"><img src="./images/stanley_controller_gazebo.gif" width="600"></a>
-
-
-### Highbay Environment
-
-```bash
-$ source devel/setup.bash
-$ roslaunch gem_gazebo gem_gazebo_rviz.launch world_name:="highbay_track.world" x:=-5.5 y:=-21 velodyne_points:="true"
-
-$ source devel/setup.bash
-$ roslaunch gem_gazebo gem_sensor_info.launch
-```
-
-<a href="url"><img src="./images/highbay_rviz.png" width="600"></a>
-
-<a href="url"><img src="./images/highbay_gazebo.png" width="600"></a>
-
-## Modules
-
-Coming soon...
-
-## Known Bugs
-
-+ Currently the latest Velodyn LiDAR sensor for Gazebo package (1.0.12) on Ubuntu 20.04,
- `velodyne_simulator`, publishes ROS messages with incorrect `frame_id` field.
-  The field is appended with a prefix that is the namespace of the ROS node.
-  TF and TF2 has deprecated the `tf_prefix` feature and does not recommand adding the
-  prefix, and therefore RViz was not able to visualize the Velodyn LiDAR scan.
-  See http://wiki.ros.org/tf2/Migration
-
-## Developers:
-+ Hang Cui <hangcui1201@gmail.com>
-
-## Contributors
-+ Jiaming Zhang <jz73@illinois.edu>
+### Path Following
+The controller receives a global path (waypoints) and uses a **KDTree** for efficient nearest-neighbor search to find the local reference trajectory at each time step.
