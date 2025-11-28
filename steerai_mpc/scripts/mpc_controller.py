@@ -24,14 +24,40 @@ class MPCController:
         # Load Model and Scalers
         self.load_model()
         
-        # MPC Parameters
-        self.T = 15 # Horizon
-        self.dt = 0.1 # Time step
-        
         # Constraints
         self.v_max = 5.5
         self.delta_max = 0.6
         self.L = 1.75 # Wheelbase
+
+        # MPC Parameters
+        self.T = 15 # Horizon
+        self.dt = 0.1 # Time step
+        
+        # MPC Cost Function Weights (Ağırlıklar)
+        # Bu ağırlıklar MPC'nin hangi hatalara ne kadar önem verdiğini belirler
+        
+        # Pozisyon Hatası Ağırlığı: Aracın referans yoldan ne kadar saptığını cezalandırır
+        # Yüksek değer = Yola daha sıkı yapışır, ama dönüşlerde ani manevralara yol açabilir
+        # AZALTILDI: 10.0 → 5.0 (Dönüşlerde biraz sapmasına tolerans göster)
+        self.weight_position = 4.0
+        
+        # Yönelim (Yaw) Hatası Ağırlığı: Aracın başının referans yöne ne kadar baktığını kontrol eder
+        # Yüksek değer = Araç her zaman yol yönüne bakar, ama düz yolda salınıma (oscillation) yol açabilir
+        # ARTIRILDI: 10.0 → 15.0 (Dönüşlerde doğru yöne bakması pozisyondan daha önemli)
+        self.weight_heading = 15.0
+        
+        # Hız Hatası Ağırlığı: Aracın hedef hıza ne kadar uyduğunu kontrol eder
+        # Düşük değer = Hız kontrolü esnek, ama hedef hıza ulaşması zor olabilir
+        self.weight_velocity = 1.0
+        
+        # Direksiyon Yumuşatma Ağırlığı: Ardışık direksiyon komutları arasındaki farkı cezalandırır
+        # Yüksek değer = Daha yumuşak direksiyon, ama dönüşlerde yavaş tepki verebilir
+        # ARTIRILDI: 1.0 → 10.0 (Ani direksiyon değişimlerini ÇOK DAHA FAZLA cezalandır!)
+        self.weight_steering_smooth = 10.0
+        
+        # Gaz/Fren Yumuşatma Ağırlığı: Ardışık hız komutları arasındaki farkı cezalandırır
+        # Yüksek değer = Daha yumuşak ivmelenme/yavaşlama
+        self.weight_acceleration_smooth = 0.1
         
         # Initialize Path Manager
         # Assuming the CSV file is in the data folder of steerai_data_collector
@@ -127,18 +153,18 @@ class MPCController:
             # Or we can just penalize sin/cos differences if needed.
             # For now, simple difference is usually okay if the reference is close.
             
-            obj += 10.0 * (x_err**2 + y_err**2) # Position Error
+            obj += self.weight_position * (x_err**2 + y_err**2) # Position Error
             # Yaw Error handling wrapping
             # Minimize 1 - cos(yaw_err) which behaves like yaw_err^2/2 for small errors
             # but handles wrapping correctly.
             # Original weight 5.0 * err^2 is roughly 10.0 * (1 - cos(err))
-            obj += 10.0 * (1 - ca.cos(yaw_err)) # Heading Error
-            obj += 1.0 * v_err**2               # Speed Error
+            obj += self.weight_heading * (1 - ca.cos(yaw_err)) # Heading Error
+            obj += self.weight_velocity * v_err**2               # Speed Error
             
             # Control Effort
             if k > 0:
-                obj += 1.0 * (self.U[1, k] - self.U[1, k-1])**2 # Smooth steering
-                obj += 0.1 * (self.U[0, k] - self.U[0, k-1])**2 # Smooth acceleration
+                obj += self.weight_steering_smooth * (self.U[1, k] - self.U[1, k-1])**2 # Smooth steering
+                obj += self.weight_acceleration_smooth * (self.U[0, k] - self.U[0, k-1])**2 # Smooth acceleration
                 
         self.opti.minimize(obj)
         
