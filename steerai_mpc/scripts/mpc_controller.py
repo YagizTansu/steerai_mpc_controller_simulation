@@ -92,9 +92,12 @@ class MPCController:
         self.pub_cmd = rospy.Publisher('/gem/ackermann_cmd', AckermannDrive, queue_size=1)
         self.sub_odom = rospy.Subscriber('/gem/base_footprint/odom', Odometry, self.odom_callback)
         self.target_marker_pub = rospy.Publisher('/gem/target_point', Marker, queue_size=1)
+        self.stats_marker_pub = rospy.Publisher('/gem/stats_text', Marker, queue_size=1)
         
         # State
         self.current_state = None # [x, y, yaw, v]
+        self.total_distance_traveled = 0.0  # Total distance traveled so far
+        self.prev_position = None  # Previous position for distance calculation
         
         rospy.loginfo("MPC Controller Initialized")
 
@@ -263,6 +266,15 @@ class MPCController:
         v = np.sqrt(msg.twist.twist.linear.x**2 + msg.twist.twist.linear.y**2)
         
         self.current_state = np.array([x, y, yaw, v])
+        
+        # Update total distance traveled
+        if self.prev_position is not None:
+            dx = x - self.prev_position[0]
+            dy = y - self.prev_position[1]
+            distance_increment = np.sqrt(dx**2 + dy**2)
+            self.total_distance_traveled += distance_increment
+        
+        self.prev_position = np.array([x, y])
     
     def get_reference(self, robot_x, robot_y, horizon_size):
         """
@@ -360,6 +372,68 @@ class MPCController:
         marker.color = ColorRGBA(1.0, 0.0, 0.0, 1.0)  # Red
         
         self.target_marker_pub.publish(marker)
+    
+    def calculate_remaining_distance(self, robot_x, robot_y):
+        """
+        Calculates the remaining distance along the path from current position to the end.
+        """
+        if self.tree is None or self.path_data is None:
+            return 0.0
+        
+        # Find nearest point index
+        dist, idx = self.tree.query([robot_x, robot_y])
+        
+        # Calculate distance from current nearest point to end
+        remaining = 0.0
+        for i in range(idx, len(self.path_data) - 1):
+            dx = self.path_data[i+1, 0] - self.path_data[i, 0]
+            dy = self.path_data[i+1, 1] - self.path_data[i, 1]
+            remaining += np.sqrt(dx**2 + dy**2)
+        
+        # Add distance from robot to nearest path point
+        remaining += dist
+        
+        return remaining
+    
+    def publish_stats_marker(self, robot_x, robot_y, robot_v):
+        """
+        Publishes text markers showing current speed, remaining distance, and completed distance.
+        """
+        # Calculate metrics
+        speed_ms = robot_v  # m/s
+        speed_kmh = robot_v * 3.6  # km/h
+        
+        remaining_dist = self.calculate_remaining_distance(robot_x, robot_y)
+        completed_dist = self.total_distance_traveled
+        
+        # Create text content
+        text_content = (
+            f"Speed: {speed_ms:.2f} m/s ({speed_kmh:.2f} km/h)\n"
+            f"Remaining Distance: {remaining_dist:.2f} m\n"
+            f"Completed Distance: {completed_dist:.2f} m"
+        )
+        
+        # Create marker
+        marker = Marker()
+        marker.header.frame_id = "world"
+        marker.header.stamp = rospy.Time.now()
+        marker.ns = "robot_stats"
+        marker.id = 1
+        marker.type = Marker.TEXT_VIEW_FACING
+        marker.action = Marker.ADD
+        
+        # Position: Above the robot
+        marker.pose.position.x = robot_x
+        marker.pose.position.y = robot_y + 0.5
+        marker.pose.position.z = 2.0  # 2 meters above ground
+        marker.pose.orientation.w = 1.0
+        
+        # Text properties
+        marker.scale.z = 0.5  # Text size (height in meters)
+        marker.color = ColorRGBA(1.0, 1.0, 1.0, 1.0)  # White text
+        marker.text = text_content
+        
+        self.stats_marker_pub.publish(marker)
 
     def run(self):
         rate = rospy.Rate(10) # 10 Hz
@@ -422,6 +496,9 @@ class MPCController:
                 # Debug Info
                 cte = self.get_cross_track_error(self.current_state[0], self.current_state[1])
                 rospy.loginfo_throttle(1, f"MPC: v={cmd_v:.2f}, steer={cmd_steer:.2f}, CTE={cte:.3f}")
+                
+                # Publish statistics markers
+                self.publish_stats_marker(self.current_state[0], self.current_state[1], self.current_state[3])
                 
             except Exception as e:
                 rospy.logwarn_throttle(1, f"MPC Solver Timeout (Recovering...)")                                                
