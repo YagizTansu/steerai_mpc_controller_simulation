@@ -121,7 +121,6 @@ class PathManager:
                          f"out of range [0.0, 0.5], clamping")
             self.duplicate_threshold = max(0.0, min(0.5, self.duplicate_threshold))
 
-
     def load_and_process_path(self):
         """
         Loads CSV, removes duplicates, interpolates, and builds KDTree.
