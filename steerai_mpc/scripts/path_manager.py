@@ -5,8 +5,11 @@ import numpy as np
 import pandas as pd
 import os
 from scipy.interpolate import splprep, splev
+from scipy.spatial import KDTree
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
+from visualization_msgs.msg import Marker
+from std_msgs.msg import ColorRGBA
 
 class PathManager:
     def __init__(self, path_file=None, param_namespace='~path_manager'):
@@ -19,13 +22,17 @@ class PathManager:
         self.param_namespace = param_namespace
         self.load_parameters(path_file)
         
-        self.path_data = None # [x, y, yaw, v]
+        self.path_data = None # [x, y, yaw]
+        self.path_velocities = None # [v]
+        self.tree = None
         
         # Publisher for global path visualization
         if self.publish_path:
             self.global_path_pub = rospy.Publisher('/gem/global_path', Path, queue_size=1, latch=True)
+            self.target_marker_pub = rospy.Publisher('/gem/target_point', Marker, queue_size=1)
         else:
             self.global_path_pub = None
+            self.target_marker_pub = None
         
         # Load and process path
         self.load_and_process_path()
@@ -77,8 +84,6 @@ class PathManager:
         self.duplicate_threshold = rospy.get_param(
             self.param_namespace + '/processing/duplicate_threshold', 0.01)
         
-        # NOTE: target_speed removed - now controlled by MPC Controller
-        
         # Visualization parameters
         self.frame_id = rospy.get_param(
             self.param_namespace + '/visualization/frame_id', 'world')
@@ -115,8 +120,6 @@ class PathManager:
             rospy.logwarn(f"duplicate_threshold={self.duplicate_threshold} "
                          f"out of range [0.0, 0.5], clamping")
             self.duplicate_threshold = max(0.0, min(0.5, self.duplicate_threshold))
-        
-        # NOTE: target_speed validation removed - now in MPC Controller
 
 
     def load_and_process_path(self):
@@ -198,8 +201,11 @@ class PathManager:
             dy = np.gradient(y_new)
             yaw_new = np.arctan2(dy, dx)
             
-            # Store as [x, y, yaw] - velocity will be added by MPC Controller
+            # Store as [x, y, yaw]
             self.path_data = np.column_stack((x_new, y_new, yaw_new))
+            
+            # Build KDTree
+            self.tree = KDTree(self.path_data[:, :2])
             
             rospy.loginfo(f"Path loaded and smoothed successfully.")
             rospy.loginfo(f"Original points: {len(points)}, Interpolated points: {len(self.path_data)}")
@@ -228,3 +234,165 @@ class PathManager:
             msg.poses.append(pose)
             
         self.global_path_pub.publish(msg)
+
+    def calculate_velocity_profile(self, target_speed):
+        """
+        Calculates a velocity profile for the path based on curvature.
+        v = sqrt(a_lat_max / curvature)
+        """
+        if self.path_data is None or len(self.path_data) < 3:
+            return
+            
+        # Extract path components
+        x = self.path_data[:, 0]
+        y = self.path_data[:, 1]
+        yaw = self.path_data[:, 2]
+        
+        # Calculate distances between points
+        dx = np.diff(x)
+        dy = np.diff(y)
+        dists = np.sqrt(dx**2 + dy**2)
+        dists = np.maximum(dists, 1e-6) # Avoid division by zero
+        
+        # Calculate curvature (change in yaw per meter)
+        # Note: yaw is already in radians
+        dyaw = np.diff(yaw)
+        
+        # Handle yaw wrapping (-pi to pi)
+        dyaw = (dyaw + np.pi) % (2 * np.pi) - np.pi
+        
+        curvature = np.abs(dyaw / dists)
+        
+        # Pad curvature to match length
+        curvature = np.append(curvature, curvature[-1])
+        
+        # Calculate max velocity based on lateral acceleration limit
+        # a_lat = v^2 * k  ->  v = sqrt(a_lat / k)
+        a_lat_max = 1.0  # m/s^2 (Conservative limit for stability)
+        
+        v_profile = np.sqrt(a_lat_max / (curvature + 1e-6))
+        
+        # Clamp velocities
+        v_min = 1.0 # Minimum speed to prevent stopping
+        v_max = target_speed
+        
+        v_profile = np.clip(v_profile, v_min, v_max)
+        
+        # Smooth the velocity profile (Moving average)
+        window_size = 5
+        kernel = np.ones(window_size) / window_size
+        v_profile = np.convolve(v_profile, kernel, mode='same')
+        
+        self.path_velocities = v_profile
+        rospy.loginfo("Velocity profile generated based on curvature.")
+        
+    def get_reference(self, robot_x, robot_y, horizon_size, dt, target_speed):
+        """
+        Finds the nearest point and returns the next N points with MPC's target velocity.
+        """
+        if self.tree is None:
+            return np.zeros((horizon_size, 4))
+
+        # Query KDTree for nearest neighbor
+        dist, idx = self.tree.query([robot_x, robot_y])
+        
+        # Initialize reference trajectory list
+        ref_traj_list = []
+        
+        # Start from the nearest point
+        curr_idx = idx
+        
+        # Add the first point (k=0)
+        first_pt = self.path_data[curr_idx]
+        first_v = self.path_velocities[curr_idx] if self.path_velocities is not None else target_speed
+        ref_traj_list.append(np.append(first_pt, first_v))
+        
+        # Loop to find subsequent points based on distance
+        for _ in range(horizon_size - 1):
+            # Determine distance to travel for this step: dt * v
+            current_ref_v = self.path_velocities[curr_idx] if self.path_velocities is not None else target_speed
+            target_dist = dt * current_ref_v
+            
+            accumulated_dist = 0.0
+            
+            # Advance along the path until we cover the target distance
+            while accumulated_dist < target_dist and curr_idx < len(self.path_data) - 1:
+                p1 = self.path_data[curr_idx]
+                p2 = self.path_data[curr_idx + 1]
+                seg_dist = np.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+                
+                accumulated_dist += seg_dist
+                curr_idx += 1
+            
+            # Add the point we landed on
+            pt = self.path_data[curr_idx]
+            v = self.path_velocities[curr_idx] if self.path_velocities is not None else target_speed
+            ref_traj_list.append(np.append(pt, v))
+            
+        # Convert to numpy array
+        ref_path = np.array(ref_traj_list) # Shape: (horizon_size, 4)
+        
+        # Visualize the target point
+        self.publish_target_marker(ref_path[0])
+        
+        return ref_path
+
+    def publish_target_marker(self, target_pt):
+        if self.target_marker_pub is None:
+            return
+            
+        marker = Marker()
+        marker.header.frame_id = "world"
+        marker.header.stamp = rospy.Time.now()
+        marker.ns = "target_point"
+        marker.id = 0
+        marker.type = Marker.SPHERE
+        marker.action = Marker.ADD
+        marker.pose.position.x = target_pt[0]
+        marker.pose.position.y = target_pt[1]
+        marker.pose.position.z = 0.5
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.3
+        marker.scale.y = 0.3
+        marker.scale.z = 0.3
+        marker.color = ColorRGBA(1.0, 0.0, 0.0, 1.0)
+        
+        self.target_marker_pub.publish(marker)
+
+    def get_cross_track_error(self, robot_x, robot_y):
+        if self.tree is None:
+            return 0.0
+            
+        dist, idx = self.tree.query([robot_x, robot_y])
+        
+        path_pt = self.path_data[idx]
+        dx = robot_x - path_pt[0]
+        dy = robot_y - path_pt[1]
+        yaw = path_pt[2]
+        
+        cross_prod = np.cos(yaw) * dy - np.sin(yaw) * dx
+        return cross_prod
+
+    def is_goal_reached(self, robot_x, robot_y, tolerance):
+        if self.path_data is None or len(self.path_data) == 0:
+            return False
+        
+        final_point = self.path_data[-1, :2]
+        dist = np.sqrt((robot_x - final_point[0])**2 + (robot_y - final_point[1])**2)
+        
+        return dist < tolerance
+
+    def calculate_remaining_distance(self, robot_x, robot_y):
+        if self.tree is None or self.path_data is None:
+            return 0.0
+        
+        dist, idx = self.tree.query([robot_x, robot_y])
+        
+        remaining = 0.0
+        for i in range(idx, len(self.path_data) - 1):
+            dx = self.path_data[i+1, 0] - self.path_data[i, 0]
+            dy = self.path_data[i+1, 1] - self.path_data[i, 1]
+            remaining += np.sqrt(dx**2 + dy**2)
+        
+        remaining += dist
+        return remaining
