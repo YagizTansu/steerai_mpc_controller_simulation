@@ -5,9 +5,27 @@ This project implements a learning-based Model Predictive Controller (MPC) for t
 ## 1. Build and Run Instructions
 
 ### Prerequisites
-- ROS Noetic
-- Python 3
-- PyTorch, CasADi, Pandas, Scikit-learn, Matplotlib
+- **ROS Noetic**
+- **Python 3**
+- **ROS Packages**:
+  - `ackermann_msgs`
+  - `geometry_msgs`
+  - `nav_msgs`
+  - `visualization_msgs`
+  - `jsk_rviz_plugins`
+  - `tf`
+  - `dynamic_reconfigure`
+  - `gem_gazebo` (Simulation environment)
+- **Python Libraries**:
+  - `torch` (PyTorch)
+  - `casadi` (Optimization)
+  - `pandas` (Data manipulation)
+  - `numpy` (Numerical operations)
+  - `scikit-learn` (Preprocessing)
+  - `matplotlib` (Plotting)
+  - `scipy` (Interpolation/KDTree)
+  - `joblib` (Model persistence)
+  - `rospkg` (ROS package path handling)
 
 ### Build
 Clone the repository into your catkin workspace and build:
@@ -94,3 +112,55 @@ Minimize $J = \sum_{k=0}^{T} (w_{pos} \cdot e_{pos}^2 + w_{head} \cdot e_{head}^
 
 ### Path Following
 The controller receives a global path (waypoints) and uses a **KDTree** for efficient nearest-neighbor search to find the local reference trajectory at each time step.
+
+---
+
+## 4. Docker Support
+
+You can run the entire simulation and control stack using Docker.
+
+### Build the Image
+Navigate to the project directory:
+```bash
+cd ~/catkin_ws/src/POLARIS_GEM_e2
+```
+
+Build the Docker image:
+```bash
+docker build -t steerai .
+```
+
+### Run the Container
+To run with GUI support (Gazebo/RViz):
+
+```bash
+xhost +local:root # Allow docker to access X server
+docker run -it --rm \
+    --net=host \
+    --gpus all \
+    --privileged \
+    --env="DISPLAY" \
+    --env="QT_X11_NO_MITSHM=1" \
+    --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
+    steerai
+```
+
+### Troubleshooting (No NVIDIA GPU)
+If you encounter an error like `could not select device driver`, try running without GPU acceleration (performance may be slower):
+
+```bash
+xhost +local:root
+docker run -it --rm \
+    --net=host \
+    --privileged \
+    --env="DISPLAY" \
+    --env="QT_X11_NO_MITSHM=1" \
+    --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
+    steerai
+```
+
+Inside the container, you can run the standard launch commands:
+```bash
+roslaunch gem_gazebo gem_gazebo_rviz.launch
+rosrun steerai_mpc mpc_controller.py
+```
