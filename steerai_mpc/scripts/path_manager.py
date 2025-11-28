@@ -5,11 +5,8 @@ import numpy as np
 import pandas as pd
 import os
 from scipy.interpolate import splprep, splev
-from scipy.spatial import KDTree
 from nav_msgs.msg import Path
-from geometry_msgs.msg import PoseStamped, Point
-from visualization_msgs.msg import Marker
-from std_msgs.msg import ColorRGBA
+from geometry_msgs.msg import PoseStamped
 
 class PathManager:
     def __init__(self, path_file):
@@ -19,11 +16,9 @@ class PathManager:
         """
         self.path_file = path_file
         self.path_data = None # [x, y, yaw, v]
-        self.tree = None
         
-        # Publishers
+        # Publisher for global path visualization
         self.global_path_pub = rospy.Publisher('/gem/global_path', Path, queue_size=1, latch=True)
-        self.target_marker_pub = rospy.Publisher('/gem/target_point', Marker, queue_size=1)
         
         # Load and process path
         self.load_and_process_path()
@@ -119,89 +114,18 @@ class PathManager:
             # Store as [x, y, yaw, v]
             self.path_data = np.column_stack((x_new, y_new, yaw_new, v_new))
             
-            # 6. Build KDTree
-            self.tree = KDTree(self.path_data[:, :2])
-            
-            rospy.loginfo(f"Path loaded successfully. Original: {len(points)}, Interpolated: {len(self.path_data)}")
-            rospy.loginfo(f"First 5 points: {self.path_data[:5, :2]}")
+            rospy.loginfo(f"Path loaded and smoothed successfully.")
+            rospy.loginfo(f"Original points: {len(points)}, Interpolated points: {len(self.path_data)}")
 
         except Exception as e:
             rospy.logerr(f"Failed to process path: {e}")
 
-    def get_reference(self, robot_x, robot_y, horizon_size):
+    def get_path_data(self):
         """
-        Finds the nearest point and returns the next N points.
-        :param robot_x: Robot X position
-        :param robot_y: Robot Y position
-        :param horizon_size: Number of points to return
-        :return: Numpy array of shape (horizon_size, 4) -> [x, y, yaw, v]
+        Returns the processed path data.
+        :return: Numpy array of shape (N, 4) -> [x, y, yaw, v] or None if not loaded
         """
-        if self.tree is None:
-            return np.zeros((horizon_size, 4))
-
-        # Query KDTree for nearest neighbor
-        dist, idx = self.tree.query([robot_x, robot_y])
-        
-        # Get slice
-        end_idx = idx + horizon_size
-        
-        if end_idx < len(self.path_data):
-            ref_path = self.path_data[idx:end_idx]
-        else:
-            # We are near the end, take what's left and pad
-            ref_path = self.path_data[idx:]
-            rows_missing = horizon_size - len(ref_path)
-            if rows_missing > 0:
-                # Pad with the last point
-                last_point = ref_path[-1]
-                padding = np.tile(last_point, (rows_missing, 1))
-                ref_path = np.vstack((ref_path, padding))
-        
-        # Visualize the target point (the first point in the reference)
-        self.publish_target_marker(ref_path[0])
-        
-        return ref_path
-
-    def get_cross_track_error(self, robot_x, robot_y):
-        """
-        Calculates perpendicular distance to the nearest path point.
-        """
-        if self.tree is None:
-            return 0.0
-            
-        dist, idx = self.tree.query([robot_x, robot_y])
-        
-        # To determine sign (left or right), we can use the cross product
-        # Vector from path point to robot
-        path_pt = self.path_data[idx]
-        dx = robot_x - path_pt[0]
-        dy = robot_y - path_pt[1]
-        
-        # Path tangent (yaw)
-        yaw = path_pt[2]
-        
-        cross_prod = np.cos(yaw) * dy - np.sin(yaw) * dx
-
-        return cross_prod # Signed distance
-    
-    def is_goal_reached(self, robot_x, robot_y, tolerance=0.5):
-        """
-        Check if robot has reached the final goal.
-        :param robot_x: Robot X position
-        :param robot_y: Robot Y position
-        :param tolerance: Distance threshold in meters (default: 0.5m)
-        :return: True if goal reached, False otherwise
-        """
-        if self.path_data is None or len(self.path_data) == 0:
-            return False
-        
-        # Get final point
-        final_point = self.path_data[-1, :2]
-        
-        # Calculate distance to final point
-        dist = np.sqrt((robot_x - final_point[0])**2 + (robot_y - final_point[1])**2)
-        
-        return dist < tolerance
+        return self.path_data
 
     def publish_global_path(self):
         msg = Path()
@@ -217,22 +141,3 @@ class PathManager:
             msg.poses.append(pose)
             
         self.global_path_pub.publish(msg)
-
-    def publish_target_marker(self, target_pt):
-        marker = Marker()
-        marker.header.frame_id = "world"
-        marker.header.stamp = rospy.Time.now()
-        marker.ns = "target_point"
-        marker.id = 0
-        marker.type = Marker.SPHERE
-        marker.action = Marker.ADD
-        marker.pose.position.x = target_pt[0]
-        marker.pose.position.y = target_pt[1]
-        marker.pose.position.z = 0.5 # Slightly elevated
-        marker.pose.orientation.w = 1.0
-        marker.scale.x = 0.3
-        marker.scale.y = 0.3
-        marker.scale.z = 0.3
-        marker.color = ColorRGBA(1.0, 0.0, 0.0, 1.0) # Red
-        
-        self.target_marker_pub.publish(marker)

@@ -7,8 +7,11 @@ import numpy as np
 import os
 import rospkg
 import joblib
+from scipy.spatial import KDTree
 from ackermann_msgs.msg import AckermannDrive
 from nav_msgs.msg import Odometry
+from visualization_msgs.msg import Marker
+from std_msgs.msg import ColorRGBA
 from tf.transformations import euler_from_quaternion
 import sys
 
@@ -74,12 +77,21 @@ class MPCController:
         path_file = os.path.join(rospack.get_path('steerai_data_collector'), 'data', 'reference_path.csv')
         self.path_manager = PathManager(path_file)
         
+        # Get path data and build KDTree for fast nearest neighbor search
+        self.path_data = self.path_manager.get_path_data()  # [x, y, yaw, v]
+        if self.path_data is not None:
+            self.tree = KDTree(self.path_data[:, :2])  # Build KDTree on x,y coordinates
+        else:
+            self.tree = None
+            rospy.logerr("Failed to load path data!")
+        
         # Setup CasADi Solver
         self.setup_solver()
         
         # ROS Setup
         self.pub_cmd = rospy.Publisher('/gem/ackermann_cmd', AckermannDrive, queue_size=1)
         self.sub_odom = rospy.Subscriber('/gem/base_footprint/odom', Odometry, self.odom_callback)
+        self.target_marker_pub = rospy.Publisher('/gem/target_point', Marker, queue_size=1)
         
         # State
         self.current_state = None # [x, y, yaw, v]
@@ -251,6 +263,103 @@ class MPCController:
         v = np.sqrt(msg.twist.twist.linear.x**2 + msg.twist.twist.linear.y**2)
         
         self.current_state = np.array([x, y, yaw, v])
+    
+    def get_reference(self, robot_x, robot_y, horizon_size):
+        """
+        Finds the nearest point and returns the next N points.
+        :param robot_x: Robot X position
+        :param robot_y: Robot Y position
+        :param horizon_size: Number of points to return
+        :return: Numpy array of shape (horizon_size, 4) -> [x, y, yaw, v]
+        """
+        if self.tree is None:
+            return np.zeros((horizon_size, 4))
+
+        # Query KDTree for nearest neighbor
+        dist, idx = self.tree.query([robot_x, robot_y])
+        
+        # Get slice
+        end_idx = idx + horizon_size
+        
+        if end_idx < len(self.path_data):
+            ref_path = self.path_data[idx:end_idx]
+        else:
+            # We are near the end, take what's left and pad
+            ref_path = self.path_data[idx:]
+            rows_missing = horizon_size - len(ref_path)
+            if rows_missing > 0:
+                # Pad with the last point
+                last_point = ref_path[-1]
+                padding = np.tile(last_point, (rows_missing, 1))
+                ref_path = np.vstack((ref_path, padding))
+        
+        # Visualize the target point (the first point in the reference)
+        self.publish_target_marker(ref_path[0])
+        
+        return ref_path
+
+    def get_cross_track_error(self, robot_x, robot_y):
+        """
+        Calculates perpendicular distance to the nearest path point.
+        """
+        if self.tree is None:
+            return 0.0
+            
+        dist, idx = self.tree.query([robot_x, robot_y])
+        
+        # To determine sign (left or right), we can use the cross product
+        # Vector from path point to robot
+        path_pt = self.path_data[idx]
+        dx = robot_x - path_pt[0]
+        dy = robot_y - path_pt[1]
+        
+        # Path tangent (yaw)
+        yaw = path_pt[2]
+        
+        cross_prod = np.cos(yaw) * dy - np.sin(yaw) * dx
+
+        return cross_prod # Signed distance
+    
+    def is_goal_reached(self, robot_x, robot_y, tolerance=0.5):
+        """
+        Check if robot has reached the final goal.
+        :param robot_x: Robot X position
+        :param robot_y: Robot Y position
+        :param tolerance: Distance threshold in meters (default: 0.5m)
+        :return: True if goal reached, False otherwise
+        """
+        if self.path_data is None or len(self.path_data) == 0:
+            return False
+        
+        # Get final point
+        final_point = self.path_data[-1, :2]
+        
+        # Calculate distance to final point
+        dist = np.sqrt((robot_x - final_point[0])**2 + (robot_y - final_point[1])**2)
+        
+        return dist < tolerance
+    
+    def publish_target_marker(self, target_pt):
+        """
+        Publishes a marker for the current target point in RViz.
+        """
+        marker = Marker()
+        marker.header.frame_id = "world"
+        marker.header.stamp = rospy.Time.now()
+        marker.ns = "target_point"
+        marker.id = 0
+        marker.type = Marker.SPHERE
+        marker.action = Marker.ADD
+        marker.pose.position.x = target_pt[0]
+        marker.pose.position.y = target_pt[1]
+        marker.pose.position.z = 0.5  # Slightly elevated
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.3
+        marker.scale.y = 0.3
+        marker.scale.z = 0.3
+        marker.color = ColorRGBA(1.0, 0.0, 0.0, 1.0)  # Red
+        
+        self.target_marker_pub.publish(marker)
 
     def run(self):
         rate = rospy.Rate(10) # 10 Hz
@@ -263,7 +372,7 @@ class MPCController:
                 continue
             
             # Check if goal is reached
-            if self.path_manager.is_goal_reached(self.current_state[0], self.current_state[1]):
+            if self.is_goal_reached(self.current_state[0], self.current_state[1]):
                 rospy.loginfo_throttle(1, "🎯 Goal Reached! Stopping vehicle.")
                 # Send stop command
                 msg = AckermannDrive()
@@ -275,7 +384,7 @@ class MPCController:
             
             # Get Reference Trajectory
             # We need T+1 points
-            ref_traj = self.path_manager.get_reference(self.current_state[0], self.current_state[1], self.T + 1)
+            ref_traj = self.get_reference(self.current_state[0], self.current_state[1], self.T + 1)
             
             # Transpose to match shape (4, T+1)
             ref_traj = ref_traj.T
@@ -311,7 +420,7 @@ class MPCController:
                 self.pub_cmd.publish(msg)
                 
                 # Debug Info
-                cte = self.path_manager.get_cross_track_error(self.current_state[0], self.current_state[1])
+                cte = self.get_cross_track_error(self.current_state[0], self.current_state[1])
                 rospy.loginfo_throttle(1, f"MPC: v={cmd_v:.2f}, steer={cmd_steer:.2f}, CTE={cte:.3f}")
                 
             except Exception as e:
