@@ -1,0 +1,67 @@
+# Path Manager Configuration Parameters
+# Settings for path loading, interpolation, and processing
+
+# ============================================================================
+# PATH FILE LOCATION
+# ============================================================================
+path:
+  # CSV file containing the reference path
+  # Can be absolute path or relative to ROS package
+  # Expected columns: 'x', 'y' or 'curr_x', 'curr_y'
+  # The path manager will automatically detect column names
+  file: "$(find steerai_data_collector)/data/reference_path.csv"
+
+# ============================================================================
+# INTERPOLATION SETTINGS
+# B-spline interpolation parameters for path smoothing
+# ============================================================================
+interpolation:
+  # Smoothing parameter for splprep
+  # Range: 0.0 - 10.0
+  # Default: 0.0 (no smoothing, interpolates exactly through points)
+  # Higher values create smoother paths but may deviate from original points
+  # Use 0.0 for precise path following, 0.5-2.0 for smoothing noisy paths
+  smoothness: 0.0
+  
+  # Degree of B-spline curve
+  # Range: 1 - 5 (typically 3)
+  # Default: 3 (cubic B-spline)
+  # 1 = linear, 2 = quadratic, 3 = cubic, 4 = quartic, 5 = quintic
+  # Higher degree = smoother curves but may cause overshoots
+  degree: 3
+  
+  # Resolution for interpolated path (meters)
+  # Range: 0.01 - 1.0
+  # Default: 0.1 m
+  # Distance between consecutive interpolated points
+  # Smaller = denser path, more computation
+  # Larger = sparser path, less accurate
+  resolution: 0.1
+
+# ============================================================================
+# PROCESSING SETTINGS
+# Path cleaning and validation
+# ============================================================================
+processing:
+  # Duplicate removal threshold (meters)
+  # Range: 0.0 - 0.5
+  # Default: 0.01 m
+  # Consecutive points closer than this are merged
+  # Prevents numerical issues from duplicate waypoints
+  duplicate_threshold: 0.01
+
+# ============================================================================
+# VISUALIZATION SETTINGS
+# RViz display options
+# NOTE: Target speed is now controlled by MPC Controller (mpc_params.yaml)
+# ============================================================================
+visualization:
+  # Frame ID for published path messages
+  # Default: "world"
+  # Must match the global frame in your TF tree
+  frame_id: "world"
+  
+  # Whether to publish global path for RViz
+  # Default: true
+  # Set to false to reduce ROS message traffic if not needed
+  publish_path: true

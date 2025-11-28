@@ -1,0 +1,176 @@
+# MPC Controller Configuration Parameters
+# This file contains all configurable parameters for the Model Predictive Controller
+
+# ============================================================================
+# VEHICLE CONSTRAINTS
+# Physical limits of the POLARIS GEM e2 vehicle
+# ============================================================================
+vehicle:
+  # Maximum velocity (m/s)
+  # Range: 0.1 - 10.0
+  # Default: 5.556 m/s (exactly 20 km/h - project requirement)
+  # Higher values allow faster driving but may reduce control accuracy
+  v_max: 2.0
+  
+  # Maximum steering angle (radians)
+  # Range: 0.1 - 1.5 rad
+  # Default: 0.6 rad (~34 degrees)
+  # This limits how sharply the vehicle can turn
+  delta_max: 0.6
+  
+  # Wheelbase length (meters)
+  # Distance between front and rear axles
+  # Default: 1.75 m (POLARIS GEM e2 specification)
+  # This is a physical constant of the vehicle
+  wheelbase: 1.75
+
+# ============================================================================
+# MPC PARAMETERS
+# Model Predictive Control horizon and time discretization
+# ============================================================================
+mpc:
+  # Prediction horizon (number of steps)
+  # Range: 5 - 50
+  # Default: 10 steps (reduced from 20 for faster computation)
+  # Longer horizon = better long-term planning but slower solver
+  # With dt=0.1, T=10 means 1 second lookahead
+  # OPTIMIZED: Increased to 8 since NN only used in first step
+  horizon: 8
+  
+  # Time step (seconds)
+  # Range: 0.01 - 0.5
+  # Default: 0.1 seconds (10 Hz)
+  # Smaller dt = more accurate but more computation
+  dt: 0.1
+
+# ============================================================================
+# COST FUNCTION WEIGHTS
+# These weights determine the relative importance of different objectives
+# Higher weight = MPC tries harder to minimize that error
+# ============================================================================
+weights:
+  # Position error weight
+  # Range: 0.0 - 100.0
+  # Default: 4.0
+  # Penalizes deviation from reference path (cross-track error)
+  # Too high: aggressive path following, can cause oscillations in turns
+  # Too low: vehicle may drift away from path
+  position: 4.0
+  
+  # Heading error weight  
+  # Range: 0.0 - 100.0
+  # Default: 15.0
+  # Penalizes vehicle heading misalignment with path direction
+  # Too high: vehicle rigidly follows path orientation, may cause jerky motion
+  # Too low: vehicle may not align properly with path, especially in curves
+  heading: 15.0
+  
+  # Velocity error weight
+  # Range: 0.0 - 100.0
+  # Default: 1.0
+  # Penalizes deviation from target speed
+  # Too high: aggressive speed tracking, may sacrifice path following
+  # Too low: vehicle may not reach target speed
+  velocity: 1.0
+  
+  # Steering smoothness weight
+  # Range: 0.0 - 100.0
+  # Default: 5.0
+  # Penalizes rapid changes in steering commands (delta_steering)
+  # Too high: very smooth but slow steering response, may miss sharp turns
+  # Too low: jerky steering, can cause instability
+  steering_smooth: 5.0
+  
+  # Acceleration smoothness weight
+  # Range: 0.0 - 100.0
+  # Default: 0.1
+  # Penalizes rapid changes in velocity commands (delta_velocity)
+  # Too high: very smooth acceleration/braking but slow speed changes
+  # Too low: jerky speed changes, uncomfortable ride
+  acceleration_smooth: 0.1
+
+# ============================================================================
+# SOLVER PARAMETERS (IPOPT)
+# Settings for the numerical optimization solver
+# Adjust these to balance solution quality vs computation time
+# ============================================================================
+solver:
+  # Maximum number of iterations
+  # Range: 10 - 2000
+  # Default: 900
+  # More iterations = higher chance of finding optimal solution but slower
+  max_iter: 900
+  
+  # Print level (console output verbosity)
+  # 0 = silent, 5 = very verbose
+  # Default: 0 (silent)
+  # Set to 5 for debugging solver issues
+  print_level: 0
+  
+  # Optimality tolerance
+  # Range: 1e-6 - 1.0
+  # Default: 1e-2 (relaxed for speed)
+  # Lower = more accurate but slower
+  # Higher = faster but less accurate
+  tol: 1.0e-2
+  
+  # Acceptable tolerance (backup stopping criterion)
+  # Range: 1e-6 - 1.0
+  # Default: 2e-1 (very relaxed)
+  # If this tolerance is reached for acceptable_iter iterations, solver stops
+  acceptable_tol: 2.0e-1
+  
+  # Acceptable iterations
+  # Range: 1 - 50
+  # Default: 5
+  # Number of iterations at acceptable_tol before declaring success
+  acceptable_iter: 5
+  
+  # Maximum CPU time per solve (seconds)
+  # Range: 0.01 - 1.0
+  # Default: 0.09 (90ms)
+  # OPTIMIZED: Can be lower now since NN only in first step
+  max_cpu_time: 0.1
+
+# ============================================================================
+# HYBRID DYNAMICS BLENDING
+# Parameters for blending kinematic and neural network dynamics models
+# ============================================================================
+hybrid:
+  # Low speed threshold for pure kinematic model (m/s)
+  # Range: 0.0 - 2.0
+  # Default: 0.5 m/s
+  # Below this speed, only kinematic model is used (alpha=0)
+  v_low: 0.5
+  
+  # High speed threshold for pure neural network model (m/s)
+  # Range: 1.0 - 5.0
+  # Default: 2.0 m/s
+  # Above this speed, only NN model is used (alpha=1)
+  # Between v_low and v_high, models are linearly blended
+  v_high: 2.0
+
+# ============================================================================
+# CONTROL PARAMETERS
+# Behavior settings for the controller
+# ============================================================================
+control:
+  # Target cruising speed (m/s)
+  # Range: 0.1 - 8.0
+  # Default: 5.556 m/s (20 km/h - project requirement)
+  # This is the desired speed the MPC will try to maintain
+  # Note: Must be <= v_max (vehicle constraint)
+  target_speed: 2.0
+  
+  # Goal reached tolerance (meters)
+  # Range: 0.1 - 2.0
+  # Default: 0.5 m
+  # Distance to final waypoint where vehicle stops
+  goal_tolerance: 0.5
+  
+  # Control loop frequency (Hz)
+  # Range: 1 - 50
+  # Default: 10 Hz
+  # How often MPC solver runs and publishes commands
+  # Must be compatible with solver max_cpu_time
+  loop_rate: 10
