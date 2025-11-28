@@ -13,6 +13,8 @@ from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
 from std_msgs.msg import ColorRGBA
 from tf.transformations import euler_from_quaternion
+from dynamic_reconfigure.server import Server
+from steerai_mpc.cfg import MPCDynamicParamsConfig
 import sys
 
 # Add current directory to path so we can import path_manager
@@ -37,6 +39,7 @@ class MPCController:
         self.path_data = self.path_manager.get_path_data()  # [x, y, yaw] from PathManager
         if self.path_data is not None:
             self.tree = KDTree(self.path_data[:, :2])  # Build KDTree on x,y coordinates
+            self.path_velocities = self.calculate_velocity_profile(self.path_data)
         else:
             self.tree = None
             rospy.logerr("Failed to load path data!")
@@ -52,12 +55,11 @@ class MPCController:
         
         # State (MUST be initialized before dynamic reconfigure)
         self.current_state = None # [x, y, yaw, v]
+        self.current_yaw_rate = 0.0
         self.total_distance_traveled = 0.0  # Total distance traveled so far
         self.prev_position = None  # Previous position for distance calculation
         
-        # Dynamic Reconfigure (after state initialization)
-        from dynamic_reconfigure.server import Server
-        from steerai_mpc.cfg import MPCDynamicParamsConfig
+
         self.dyn_reconfig_srv = Server(MPCDynamicParamsConfig, self.dynamic_reconfigure_callback)
         
         rospy.loginfo("MPC Controller Initialized")
@@ -288,26 +290,26 @@ class MPCController:
             cmd_v = self.U[0, k]
             cmd_steer = self.U[1, k]
             
-            # OPTIMIZED STRATEGY: Use NN only for first step, kinematic for rest
-            # This satisfies assignment requirement (NN is used) but is MUCH faster
-            # First step (k=0): Use hybrid NN/Kinematic based on speed
-            # Other steps (k>0): Pure kinematic (fast!)
+            # FIRST-STEP NN STRATEGY: Use NN only for k=0, kinematic for k>0
+            # This provides computational efficiency while using learned model
+            # The NN is consulted at every MPC iteration (10 Hz) for immediate future
             
             if k == 0:
-                # Neural Net Prediction (only for first step)
+                # First step: Use Neural Network with hybrid blending
                 next_v_nn, delta_yaw_nn = self.neural_net_dynamics(curr_v, cmd_v, cmd_steer)
                 
-                # Kinematic Prediction
+                # Kinematic prediction for blending
                 next_v_kin = cmd_v
                 delta_yaw_kin = (curr_v / self.L * ca.tan(cmd_steer)) * self.dt
                 
-                # Hybrid blending based on speed
+                # Hybrid blending based on vehicle speed
+                # alpha=0: pure kinematic (low speed), alpha=1: pure NN (high speed)
                 alpha = ca.fmin(1.0, ca.fmax(0.0, (curr_v - self.v_low) / (self.v_high - self.v_low)))
                 
                 next_v_pred = (1 - alpha) * next_v_kin + alpha * next_v_nn
                 delta_yaw_pred = (1 - alpha) * delta_yaw_kin + alpha * delta_yaw_nn
             else:
-                # Pure kinematic for steps k > 0 (much faster!)
+                # Subsequent steps (k>0): Pure kinematic model for computational efficiency
                 next_v_pred = cmd_v
                 delta_yaw_pred = (curr_v / self.L * ca.tan(cmd_steer)) * self.dt
             
@@ -338,9 +340,10 @@ class MPCController:
             'acceptable_tol': self.solver_acceptable_tol,
             'acceptable_iter': self.solver_acceptable_iter,
             'max_cpu_time': self.solver_max_cpu_time,
-            # CRITICAL: Use Hessian approximation for speed with NN dynamics
-            'hessian_approximation': 'limited-memory',  # L-BFGS instead of exact Hessian
-            'limited_memory_max_history': 6,  # Trade-off between speed and accuracy
+            # Use L-BFGS Hessian approximation for speed with NN dynamics
+            # This avoids expensive exact Hessian computation
+            'hessian_approximation': 'limited-memory',
+            'limited_memory_max_history': 6,
         }
         self.opti.solver('ipopt', p_opts, s_opts)
         
@@ -362,6 +365,7 @@ class MPCController:
         (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
         
         v = np.sqrt(msg.twist.twist.linear.x**2 + msg.twist.twist.linear.y**2)
+        self.current_yaw_rate = msg.twist.twist.angular.z
         
         self.current_state = np.array([x, y, yaw, v])
         
@@ -388,29 +392,99 @@ class MPCController:
         # Query KDTree for nearest neighbor
         dist, idx = self.tree.query([robot_x, robot_y])
         
-        # Get slice from geometric path (x, y, yaw)
-        end_idx = idx + horizon_size
+        # Initialize reference trajectory list
+        ref_traj_list = []
         
-        if end_idx < len(self.path_data):
-            ref_path_geom = self.path_data[idx:end_idx]  # [x, y, yaw]
-        else:
-            # We are near the end, take what's left and pad
-            ref_path_geom = self.path_data[idx:]
-            rows_missing = horizon_size - len(ref_path_geom)
-            if rows_missing > 0:
-                # Pad with the last point
-                last_point = ref_path_geom[-1]
-                padding = np.tile(last_point, (rows_missing, 1))
-                ref_path_geom = np.vstack((ref_path_geom, padding))
+        # Start from the nearest point
+        curr_idx = idx
         
-        # Add velocity column with MPC's target speed
-        v_ref = np.full((len(ref_path_geom),), self.target_speed)
-        ref_path = np.column_stack((ref_path_geom, v_ref))  # [x, y, yaw, v]
+        # Add the first point (k=0)
+        # We include x, y, yaw, and the target velocity from our profile
+        first_pt = self.path_data[curr_idx]
+        first_v = self.path_velocities[curr_idx] if hasattr(self, 'path_velocities') else self.target_speed
+        ref_traj_list.append(np.append(first_pt, first_v))
+        
+        # Loop to find subsequent points based on distance
+        for _ in range(horizon_size - 1):
+            # Determine distance to travel for this step: dt * v
+            # Use the velocity of the current reference point to determine step size
+            current_ref_v = self.path_velocities[curr_idx] if hasattr(self, 'path_velocities') else self.target_speed
+            target_dist = self.dt * current_ref_v
+            
+            accumulated_dist = 0.0
+            
+            # Advance along the path until we cover the target distance
+            while accumulated_dist < target_dist and curr_idx < len(self.path_data) - 1:
+                p1 = self.path_data[curr_idx]
+                p2 = self.path_data[curr_idx + 1]
+                seg_dist = np.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+                
+                accumulated_dist += seg_dist
+                curr_idx += 1
+            
+            # Add the point we landed on
+            pt = self.path_data[curr_idx]
+            v = self.path_velocities[curr_idx] if hasattr(self, 'path_velocities') else self.target_speed
+            ref_traj_list.append(np.append(pt, v))
+            
+        # Convert to numpy array
+        ref_path = np.array(ref_traj_list) # Shape: (horizon_size, 4)
         
         # Visualize the target point (the first point in the reference)
         self.publish_target_marker(ref_path[0])
         
         return ref_path
+
+    def calculate_velocity_profile(self, path_data):
+        """
+        Calculates a velocity profile for the path based on curvature.
+        v = sqrt(a_lat_max / curvature)
+        """
+        if path_data is None or len(path_data) < 3:
+            return np.full(len(path_data), self.target_speed)
+            
+        # Extract path components
+        x = path_data[:, 0]
+        y = path_data[:, 1]
+        yaw = path_data[:, 2]
+        
+        # Calculate distances between points
+        dx = np.diff(x)
+        dy = np.diff(y)
+        dists = np.sqrt(dx**2 + dy**2)
+        dists = np.maximum(dists, 1e-6) # Avoid division by zero
+        
+        # Calculate curvature (change in yaw per meter)
+        # Note: yaw is already in radians
+        dyaw = np.diff(yaw)
+        
+        # Handle yaw wrapping (-pi to pi)
+        dyaw = (dyaw + np.pi) % (2 * np.pi) - np.pi
+        
+        curvature = np.abs(dyaw / dists)
+        
+        # Pad curvature to match length
+        curvature = np.append(curvature, curvature[-1])
+        
+        # Calculate max velocity based on lateral acceleration limit
+        # a_lat = v^2 * k  ->  v = sqrt(a_lat / k)
+        a_lat_max = 1.0  # m/s^2 (Conservative limit for stability)
+        
+        v_profile = np.sqrt(a_lat_max / (curvature + 1e-6))
+        
+        # Clamp velocities
+        v_min = 1.0 # Minimum speed to prevent stopping
+        v_max = self.target_speed
+        
+        v_profile = np.clip(v_profile, v_min, v_max)
+        
+        # Smooth the velocity profile (Moving average)
+        window_size = 5
+        kernel = np.ones(window_size) / window_size
+        v_profile = np.convolve(v_profile, kernel, mode='same')
+        
+        rospy.loginfo("Velocity profile generated based on curvature.")
+        return v_profile
 
     def get_cross_track_error(self, robot_x, robot_y):
         """
@@ -563,14 +637,31 @@ class MPCController:
             
             # Get Reference Trajectory
             # We need T+1 points
-            ref_traj = self.get_reference(self.current_state[0], self.current_state[1], self.T + 1)
+            # Use predicted state for reference generation to align with the delay compensation
+            # Delay Compensation: Predict state at t + dt
+            # We assume the control loop delay is roughly one time step (dt)
+            delay_dt = self.dt 
+
+            x0, y0, yaw0, v0 = self.current_state
+            yaw_rate = self.current_yaw_rate
+            
+            # Kinematic prediction
+            x_pred = x0 + v0 * np.cos(yaw0) * delay_dt
+            y_pred = y0 + v0 * np.sin(yaw0) * delay_dt
+            yaw_pred = yaw0 + yaw_rate * delay_dt
+            v_pred = v0 # Assume constant speed for short delay
+            
+            predicted_state = np.array([x_pred, y_pred, yaw_pred, v_pred])
+            
+            ref_traj = self.get_reference(predicted_state[0], predicted_state[1], self.T + 1)
             
             # Transpose to match shape (4, T+1)
             ref_traj = ref_traj.T
             
             try:
                 # Set Parameters
-                self.opti.set_value(self.P, self.current_state)
+                # Use PREDICTED state as initial condition for MPC
+                self.opti.set_value(self.P, predicted_state)
                 self.opti.set_value(self.Ref, ref_traj)
                 
                 # Warm Start

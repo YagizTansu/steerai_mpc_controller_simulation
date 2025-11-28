@@ -555,8 +555,16 @@ Visualization Manager:
       Marker Topic: /gem/target_point
       Name: Marker
       Namespaces:
-        {}
+        target_point: true
       Queue Size: 10
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /gem/stats_text
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
       Value: true
   Enabled: true
   Global Options:
@@ -586,7 +594,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 24.591957092285156
+      Distance: 30.8481502532959
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -594,9 +602,9 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.4636380076408386
-        Y: -0.7044975757598877
-        Z: 1.795026183128357
+        X: 9.90163803100586
+        Y: -1.1582545042037964
+        Z: 1.8044719696044922
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -604,7 +612,7 @@ Visualization Manager:
       Near Clip Distance: 0.009999999776482582
       Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
-      Yaw: 3.1180264949798584
+      Yaw: 3.14302659034729
     Saved: ~
 Window Geometry:
   Displays:

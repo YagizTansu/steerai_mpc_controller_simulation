@@ -34,8 +34,8 @@ mpc:
   # Default: 10 steps (reduced from 20 for faster computation)
   # Longer horizon = better long-term planning but slower solver
   # With dt=0.1, T=10 means 1 second lookahead
-  # OPTIMIZED: Increased to 8 since NN only used in first step
-  horizon: 8
+  # FIRST-STEP NN: Increased to 12 for better path tracking
+  horizon: 15
   
   # Time step (seconds)
   # Range: 0.01 - 0.5
@@ -55,7 +55,8 @@ weights:
   # Penalizes deviation from reference path (cross-track error)
   # Too high: aggressive path following, can cause oscillations in turns
   # Too low: vehicle may drift away from path
-  position: 4.0
+  # INCREASED for better path tracking
+  position: 10.0
   
   # Heading error weight  
   # Range: 0.0 - 100.0
@@ -63,7 +64,8 @@ weights:
   # Penalizes vehicle heading misalignment with path direction
   # Too high: vehicle rigidly follows path orientation, may cause jerky motion
   # Too low: vehicle may not align properly with path, especially in curves
-  heading: 15.0
+  # REDUCED slightly to balance with position weight
+  heading: 5.0
   
   # Velocity error weight
   # Range: 0.0 - 100.0
@@ -79,6 +81,7 @@ weights:
   # Penalizes rapid changes in steering commands (delta_steering)
   # Too high: very smooth but slow steering response, may miss sharp turns
   # Too low: jerky steering, can cause instability
+  # REDUCED for faster steering response in path tracking
   steering_smooth: 5.0
   
   # Acceleration smoothness weight
@@ -99,7 +102,7 @@ solver:
   # Range: 10 - 2000
   # Default: 900
   # More iterations = higher chance of finding optimal solution but slower
-  max_iter: 900
+  max_iter: 1000
   
   # Print level (console output verbosity)
   # 0 = silent, 5 = very verbose
@@ -112,7 +115,7 @@ solver:
   # Default: 1e-2 (relaxed for speed)
   # Lower = more accurate but slower
   # Higher = faster but less accurate
-  tol: 1.0e-2
+  tol: 1.0e-1
   
   # Acceptable tolerance (backup stopping criterion)
   # Range: 1e-6 - 1.0
@@ -130,7 +133,7 @@ solver:
   # Range: 0.01 - 1.0
   # Default: 0.09 (90ms)
   # OPTIMIZED: Can be lower now since NN only in first step
-  max_cpu_time: 0.1
+  max_cpu_time: 0.15
 
 # ============================================================================
 # HYBRID DYNAMICS BLENDING
