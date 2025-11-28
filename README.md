@@ -45,7 +45,7 @@ source devel/setup.bash
 
 2. **Run the MPC Controller:**
    ```bash
-   rosrun steerai_mpc mpc_controller.py
+   roslaunch steerai_mpc mpc_controller.launch
    ```
    *Note: Ensure you have a trained model before running the controller.*
 
@@ -137,7 +137,6 @@ To run with GUI support (Gazebo/RViz):
 xhost +local:root # Allow docker to access X server
 docker run -it --rm \
     --net=host \
-    --gpus all \
     --privileged \
     --env="DISPLAY" \
     --env="QT_X11_NO_MITSHM=1" \
@@ -145,13 +144,14 @@ docker run -it --rm \
     steerai
 ```
 
-### Troubleshooting (No NVIDIA GPU)
-If you encounter an error like `could not select device driver`, try running without GPU acceleration (performance may be slower):
+### Optional: Enable GPU Support
+If you have an NVIDIA GPU and the NVIDIA Container Toolkit installed, you can enable GPU acceleration for better performance:
 
 ```bash
 xhost +local:root
 docker run -it --rm \
     --net=host \
+    --gpus all \
     --privileged \
     --env="DISPLAY" \
     --env="QT_X11_NO_MITSHM=1" \
@@ -162,5 +162,5 @@ docker run -it --rm \
 Inside the container, you can run the standard launch commands:
 ```bash
 roslaunch gem_gazebo gem_gazebo_rviz.launch
-rosrun steerai_mpc mpc_controller.py
+roslaunch steerai_mpc mpc_controller.launch
 ```
