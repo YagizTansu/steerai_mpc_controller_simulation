@@ -56,6 +56,8 @@ The model is validated on a hold-out test set (20% of collected data).
 The training script generates plots showing the loss curve and prediction performance against ground truth.
 *(See `steerai_sysid/training_results.png` after training)*
 
+![Training Results](steerai_sysid/training_results.png)
+
 To retrain the model:
 ```bash
 rosrun steerai_sysid train_dynamics.py
