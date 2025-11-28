@@ -180,15 +180,8 @@ class PathManager:
         # Path tangent (yaw)
         yaw = path_pt[2]
         
-        # Rotate robot vector by -yaw to align with path frame
-        # If y component is positive, it's to the left (positive CTE), else right.
-        # Alternatively: Cross product of Path Tangent and Vector to Robot
-        # Tangent = [cos(yaw), sin(yaw)]
-        # Vector = [dx, dy]
-        # Cross = cos(yaw)*dy - sin(yaw)*dx
-        
         cross_prod = np.cos(yaw) * dy - np.sin(yaw) * dx
-        
+
         return cross_prod # Signed distance
     
     def is_goal_reached(self, robot_x, robot_y, tolerance=0.5):
@@ -220,9 +213,6 @@ class PathManager:
             pose.header = msg.header
             pose.pose.position.x = pt[0]
             pose.pose.position.y = pt[1]
-            # Orientation is not strictly needed for the line strip, but good to have
-            # We could convert yaw to quaternion if needed, but for Path visualization 
-            # usually position is enough.
             pose.pose.orientation.w = 1.0
             msg.poses.append(pose)
             
