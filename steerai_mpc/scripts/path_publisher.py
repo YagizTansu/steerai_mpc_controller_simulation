@@ -6,6 +6,7 @@ import numpy as np
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 from tf.transformations import quaternion_from_euler
+import rospkg
 import os
 
 class PathPublisher:
@@ -13,14 +14,27 @@ class PathPublisher:
         rospy.init_node('path_publisher')
         
         # Parameters
-        self.path_file = rospy.get_param('~path_file', '')
+        self.path_file = rospy.get_param('~path_file', 'paths/reference_path.csv')
         self.frame_id = rospy.get_param('~frame_id', 'world')
         self.topic_name = rospy.get_param('~topic_name', '/gem/raw_path')
         
         if not self.path_file:
-            # Try to find it in the package if not absolute
-            # For now, just warn if empty
-            rospy.logwarn("No path_file parameter provided. Waiting for parameter update or manual publish.")
+            rospy.logwarn("No path_file parameter provided.")
+            return
+
+        # Resolve path if relative
+        if not os.path.isabs(self.path_file):
+            try:
+                rospack = rospkg.RosPack()
+                pkg_path = rospack.get_path('steerai_mpc')
+                
+                # Handle case where default included package name
+                if self.path_file.startswith('steerai_mpc/'):
+                    self.path_file = self.path_file.replace('steerai_mpc/', '', 1)
+                    
+                self.path_file = os.path.join(pkg_path, self.path_file)
+            except Exception as e:
+                rospy.logerr(f"Could not resolve package path: {e}")
         
         self.pub = rospy.Publisher(self.topic_name, Path, queue_size=1, latch=True)
         

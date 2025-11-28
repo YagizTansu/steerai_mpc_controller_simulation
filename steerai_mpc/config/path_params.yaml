@@ -9,7 +9,7 @@ path:
   # Can be absolute path or relative to ROS package
   # Expected columns: 'x', 'y' or 'curr_x', 'curr_y'
   # The path manager will automatically detect column names
-  file: "$(find steerai_data_collector)/data/reference_path.csv"
+  file: "$(find steerai_mpc)/paths/reference_path.csv"
 
 # ============================================================================
 # INTERPOLATION SETTINGS
