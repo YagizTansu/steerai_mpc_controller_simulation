@@ -204,8 +204,31 @@ class PathManager:
         kernel = np.ones(window_size) / window_size
         v_profile = np.convolve(v_profile, kernel, mode='same')
         
+        # Deceleration at the end
+        decel_dist = 10.0 # meters
+        final_speed = 0.0
+        
+        # Calculate cumulative distance from end
+        dist_from_end = 0.0
+        for i in range(len(self.path_data) - 1, -1, -1):
+            if i < len(self.path_data) - 1:
+                p1 = self.path_data[i]
+                p2 = self.path_data[i+1]
+                d = np.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+                dist_from_end += d
+            
+            if dist_from_end > decel_dist:
+                break
+            
+            # Linear ramp down
+            ratio = dist_from_end / decel_dist
+            target_v = final_speed + (self.target_speed - final_speed) * ratio
+            
+            # Take minimum of existing profile and deceleration ramp
+            v_profile[i] = min(v_profile[i], target_v)
+
         self.path_velocities = v_profile
-        rospy.loginfo(f"Velocity profile generated with max speed {self.target_speed:.2f} m/s.")
+        rospy.loginfo(f"Velocity profile generated with max speed {self.target_speed:.2f} m/s and deceleration over last {decel_dist}m.")
         
     def get_reference(self, robot_x, robot_y, horizon_size, dt):
         """
