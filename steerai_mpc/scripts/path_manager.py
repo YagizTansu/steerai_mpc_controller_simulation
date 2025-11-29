@@ -26,6 +26,7 @@ class PathManager:
         self.path_data = None # [x, y, yaw]
         self.path_velocities = None # [v]
         self.tree = None
+        self.path_seq = 0 # Sequence number for path updates
         self.target_speed = 5.0 # Default, will be updated by controller
         
         # Publisher for processed global path visualization
@@ -136,13 +137,17 @@ class PathManager:
             if self.global_path_pub is not None:
                 self.publish_global_path()
             
-            rospy.loginfo(f"Path processed successfully. Interpolated points: {len(self.path_data)}")
+            self.path_seq += 1
+            rospy.loginfo(f"Path processed successfully. Interpolated points: {len(self.path_data)} (Seq: {self.path_seq})")
 
         except Exception as e:
             rospy.logerr(f"Failed to process path: {e}")
 
     def get_path_data(self):
         return self.path_data
+
+    def get_path_seq(self):
+        return self.path_seq
 
     def publish_global_path(self):
         msg = Path()

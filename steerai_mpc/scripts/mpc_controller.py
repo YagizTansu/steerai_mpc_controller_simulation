@@ -77,7 +77,9 @@ class MPCController:
         self.current_state = None # [x, y, yaw, v]
         self.current_yaw_rate = 0.0
         self.total_distance_traveled = 0.0
+        self.total_distance_traveled = 0.0
         self.prev_position = None
+        self.last_completed_path_seq = -1
         
         # Dynamic Reconfigure
         self.dyn_reconfig_srv = Server(MPCDynamicParamsConfig, self.dynamic_reconfigure_callback)
@@ -218,9 +220,22 @@ class MPCController:
                 rate.sleep()
                 continue
 
+            # Check if we have already completed this path
+            current_path_seq = self.path_manager.get_path_seq()
+            if current_path_seq == self.last_completed_path_seq:
+                rospy.loginfo_throttle(2, f"Waiting for new path... (Completed Seq: {self.last_completed_path_seq})")
+                # Stop vehicle
+                msg = AckermannDrive()
+                msg.speed = 0.0
+                msg.steering_angle = 0.0
+                self.pub_cmd.publish(msg)
+                rate.sleep()
+                continue
+
             # Check goal
             if self.path_manager.is_goal_reached(self.current_state[0], self.current_state[1], self.goal_tolerance):
-                rospy.loginfo_throttle(1, "🎯 Goal Reached! Stopping vehicle.")
+                rospy.loginfo_throttle(1, f"🎯 Goal Reached! Stopping vehicle. (Seq: {current_path_seq})")
+                self.last_completed_path_seq = current_path_seq
                 msg = AckermannDrive()
                 msg.speed = 0.0
                 msg.steering_angle = 0.0
