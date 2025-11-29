@@ -55,6 +55,15 @@ class PathManager:
         self.duplicate_threshold = rospy.get_param(
             self.param_namespace + '/processing/duplicate_threshold', 0.01)
         
+        # Velocity Profile Parameters
+        # Note: These are loaded from the main 'mpc_params.yaml' which is usually loaded under /mpc_controller namespace
+        # We try to find them there, otherwise fall back to defaults
+        self.a_lat_max = rospy.get_param('/mpc_controller/path_processing/a_lat_max', 1.0)
+        self.smoothing_window = rospy.get_param('/mpc_controller/path_processing/smoothing_window', 20)
+        self.v_min = rospy.get_param('/mpc_controller/path_processing/v_min', 1.0)
+        
+        rospy.loginfo(f"PathManager Params: a_lat_max={self.a_lat_max}, window={self.smoothing_window}, v_min={self.v_min}")
+        
         # Visualization parameters
         self.frame_id = rospy.get_param(
             self.param_namespace + '/visualization/frame_id', 'world')
@@ -190,17 +199,16 @@ class PathManager:
         curvature = np.append(curvature, curvature[-1])
         
         # Calculate max velocity
-        a_lat_max = 1.0
-        v_profile = np.sqrt(a_lat_max / (curvature + 1e-6))
+        # Use parameter for lateral acceleration limit
+        v_profile = np.sqrt(self.a_lat_max / (curvature + 1e-6))
         
         # Clamp velocities
-        v_min = 1.0
-        v_max = self.target_speed
-        
-        v_profile = np.clip(v_profile, v_min, v_max)
+        # Use parameter for minimum velocity
+        v_profile = np.clip(v_profile, self.v_min, self.target_speed)
         
         # Smooth
-        window_size = 5
+        # Use parameter for window size
+        window_size = self.smoothing_window
         kernel = np.ones(window_size) / window_size
         v_profile = np.convolve(v_profile, kernel, mode='same')
         
