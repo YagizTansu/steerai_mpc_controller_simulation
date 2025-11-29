@@ -56,11 +56,13 @@ class PathManager:
             self.param_namespace + '/processing/duplicate_threshold', 0.01)
         
         # Velocity Profile Parameters
-        # Note: These are loaded from the main 'mpc_params.yaml' which is usually loaded under /mpc_controller namespace
-        # We try to find them there, otherwise fall back to defaults
-        self.a_lat_max = rospy.get_param('/mpc_controller/path_processing/a_lat_max', 1.0)
-        self.smoothing_window = rospy.get_param('/mpc_controller/path_processing/smoothing_window', 20)
-        self.v_min = rospy.get_param('/mpc_controller/path_processing/v_min', 1.0)
+        # Loaded from path_params.yaml
+        self.a_lat_max = rospy.get_param(
+            self.param_namespace + '/velocity_profile/a_lat_max', 1.0)
+        self.smoothing_window = rospy.get_param(
+            self.param_namespace + '/velocity_profile/smoothing_window', 20)
+        self.v_min = rospy.get_param(
+            self.param_namespace + '/velocity_profile/v_min', 1.0)
         
         rospy.loginfo(f"PathManager Params: a_lat_max={self.a_lat_max}, window={self.smoothing_window}, v_min={self.v_min}")
         
@@ -238,6 +240,9 @@ class PathManager:
         self.path_velocities = v_profile
         rospy.loginfo(f"Velocity profile generated with max speed {self.target_speed:.2f} m/s and deceleration over last {decel_dist}m.")
         
+        # Print details
+        self.print_path_details()
+        
     def get_reference(self, robot_x, robot_y, horizon_size, dt):
         """
         Finds the nearest point and returns the next N points.
@@ -340,3 +345,55 @@ class PathManager:
         
         remaining += dist
         return remaining
+
+    def print_path_details(self):
+        """Prints a formatted summary of the path and velocity profile."""
+        if self.path_data is None or self.path_velocities is None:
+            return
+
+        print("\n" + "="*95)
+        print(f"PATH PROFILE SUMMARY ({len(self.path_data)} points) - Sampled")
+        print("="*95)
+        print(f"{'Idx':<6} | {'X (m)':<10} | {'Y (m)':<10} | {'Yaw (rad)':<10} | {'Speed (m/s)':<12} | {'Curvature':<10} | {'Note'}")
+        print("-" * 95)
+        
+        # Re-calculate curvature for display
+        x = self.path_data[:, 0]
+        y = self.path_data[:, 1]
+        yaw = self.path_data[:, 2]
+        
+        dx = np.diff(x)
+        dy = np.diff(y)
+        dists = np.sqrt(dx**2 + dy**2)
+        dists = np.maximum(dists, 1e-6)
+        
+        dyaw = np.diff(yaw)
+        dyaw = (dyaw + np.pi) % (2 * np.pi) - np.pi
+        curvature = np.abs(dyaw / dists)
+        curvature = np.append(curvature, 0.0) # Pad last
+        
+        # Show points (Sampled)
+        step = max(1, len(self.path_data) // 40) # Show ~40 points
+        
+        for i in range(0, len(self.path_data), step):
+            note = ""
+            if i == 0: note = "START"
+            elif i >= len(self.path_data) - step: note = "END"
+            elif self.path_velocities[i] < self.target_speed - 0.5: note = "SLOW (Turn)"
+            
+            print(f"{i:<6} | {x[i]:<10.2f} | {y[i]:<10.2f} | {yaw[i]:<10.2f} | {self.path_velocities[i]:<12.2f} | {curvature[i]:<10.4f} | {note}")
+            
+        # Always print the last point
+        last = len(self.path_data) - 1
+        if last % step != 0:
+             print(f"{last:<6} | {x[last]:<10.2f} | {y[last]:<10.2f} | {yaw[last]:<10.2f} | {self.path_velocities[last]:<12.2f} | {curvature[last]:<10.4f} | END")
+
+        print("="*95 + "\n")
+
+if __name__ == '__main__':
+    try:
+        rospy.init_node('path_manager_node')
+        pm = PathManager()
+        rospy.spin()
+    except rospy.ROSInterruptException:
+        pass

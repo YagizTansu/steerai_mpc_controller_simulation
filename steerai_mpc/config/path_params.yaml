@@ -65,3 +65,27 @@ visualization:
   # Default: true
   # Set to false to reduce ROS message traffic if not needed
   publish_path: true
+
+# ============================================================================
+# VELOCITY PROFILE PARAMETERS
+# Settings for generating target speeds based on curvature
+# ============================================================================
+velocity_profile:
+  # Maximum lateral acceleration (m/s^2)
+  # Determines how much the vehicle slows down for turns
+  # Lower value = slower in turns (safer)
+  # Higher value = faster in turns (more aggressive)
+  # Default: 1.0
+  a_lat_max: 3.0
+
+  # Velocity smoothing window size
+  # Number of points to average for smooth velocity transitions
+  # Higher value = smoother but less responsive speed changes
+  # Default: 5 (increased to 20 for smoother ride)
+  smoothing_window: 20
+
+  # Minimum velocity in profile (m/s)
+  # The lowest speed the vehicle is allowed to plan for (except stopping)
+  # Prevents vehicle from stopping completely in very sharp turns
+  # Default: 1.0
+  v_min: 1.0
