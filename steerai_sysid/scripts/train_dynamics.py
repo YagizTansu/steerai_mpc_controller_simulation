@@ -50,13 +50,23 @@ def train_model():
     # Inputs: [curr_speed, cmd_speed, cmd_steering_angle]
     # Targets: [next_speed, delta_yaw]
     
+    # DOWNSAMPLING: 50Hz -> 10Hz
+    # Take every 5th sample to match MPC dt=0.1s
+    # Data Collector dt = 0.02s (50Hz)
+    # Target dt = 0.10s (10Hz)
+    df = df.iloc[::5].reset_index(drop=True)
+    print(f"Data downsampled to 10Hz. New shape: {df.shape}")
+    
     # Shift data to get next state
     df['next_speed'] = df['curr_speed'].shift(-1)
     df['next_yaw'] = df['curr_yaw'].shift(-1)
     
     # Calculate delta_yaw (handle wrapping if necessary, but for small steps simple diff is usually ok)
     # For robust wrapping: (angle + pi) % (2*pi) - pi
-    df['delta_yaw'] = df['next_yaw'] - df['curr_yaw']
+    # Calculate delta_yaw with robust wrapping
+    # (angle + pi) % (2*pi) - pi
+    diff = df['next_yaw'] - df['curr_yaw']
+    df['delta_yaw'] = (diff + np.pi) % (2 * np.pi) - np.pi
     
     # Drop last row (NaN due to shift)
     df = df.dropna()
