@@ -4,6 +4,8 @@ import rospy
 import numpy as np
 import os
 import sys
+import matplotlib
+matplotlib.use('Agg') # Set backend to non-interactive to prevent threading issues
 import matplotlib.pyplot as plt
 import datetime
 from ackermann_msgs.msg import AckermannDrive
