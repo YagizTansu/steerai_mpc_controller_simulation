@@ -35,7 +35,7 @@ mpc:
   # Longer horizon = better long-term planning but slower solver
   # With dt=0.1, T=10 means 1 second lookahead
   # FIRST-STEP NN: Increased to 12 for better path tracking
-  horizon: 25
+  horizon: 20
   
   # Time step (seconds)
   # Range: 0.01 - 0.5
@@ -56,7 +56,7 @@ weights:
   # Too high: aggressive path following, can cause oscillations in turns
   # Too low: vehicle may drift away from path
   # INCREASED for better path tracking
-  position: 2.0
+  position: 5.0
   
   # Heading error weight  
   # Range: 0.0 - 100.0
@@ -65,7 +65,7 @@ weights:
   # Too high: vehicle rigidly follows path orientation, may cause jerky motion
   # Too low: vehicle may not align properly with path, especially in curves
   # REDUCED slightly to balance with position weight
-  heading: 1.0
+  heading: 10.0
   
   # Velocity error weight
   # Range: 0.0 - 100.0
@@ -82,7 +82,7 @@ weights:
   # Too high: very smooth but slow steering response, may miss sharp turns
   # Too low: jerky steering, can cause instability
   # REDUCED for faster steering response in path tracking
-  steering_smooth: 5.0
+  steering_smooth: 1.0
   
   # Acceleration smoothness weight
   # Range: 0.0 - 100.0
