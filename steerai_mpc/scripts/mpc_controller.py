@@ -83,6 +83,11 @@ class MPCController:
         self.prev_position = None
         self.last_completed_path_seq = -1
         
+        # Path tracking for goal detection
+        self.current_path_seq = -1
+        self.dist_traveled_on_path = 0.0
+        self.current_path_length = 0.0
+        
         # Data recording
         self.cte_history = []
         self.time_history = []
@@ -176,7 +181,9 @@ class MPCController:
         if self.prev_position is not None:
             dx = x - self.prev_position[0]
             dy = y - self.prev_position[1]
-            self.total_distance_traveled += np.sqrt(dx**2 + dy**2)
+            dist = np.sqrt(dx**2 + dy**2)
+            self.total_distance_traveled += dist
+            self.dist_traveled_on_path += dist
         
         self.prev_position = np.array([x, y])
 
@@ -262,8 +269,15 @@ class MPCController:
                 rate.sleep()
                 continue
 
-            # Check if we have already completed this path
+            # Detect new path
             current_path_seq = self.path_manager.get_path_seq()
+            if current_path_seq != self.current_path_seq:
+                self.current_path_seq = current_path_seq
+                self.dist_traveled_on_path = 0.0
+                self.current_path_length = self.path_manager.get_path_length()
+                rospy.loginfo(f"New path received (Seq: {current_path_seq}), Length: {self.current_path_length:.2f}m")
+
+            # Check if we have already completed this path
             if current_path_seq == self.last_completed_path_seq:
                 rospy.loginfo_throttle(2, f"Waiting for new path... (Completed Seq: {self.last_completed_path_seq})")
                 # Stop vehicle
@@ -275,7 +289,12 @@ class MPCController:
                 continue
 
             # Check goal
-            if self.path_manager.is_goal_reached(self.current_state[0], self.current_state[1], self.goal_tolerance):
+            # Only check for goal if we have traveled a significant portion of the path (e.g. 50% or > 5m)
+            # This prevents premature goal detection on looped paths where start ~= end
+            min_dist_check = min(5.0, self.current_path_length * 0.5)
+            
+            if self.dist_traveled_on_path > min_dist_check and \
+               self.path_manager.is_goal_reached(self.current_state[0], self.current_state[1], self.goal_tolerance):
                 rospy.loginfo_throttle(1, f"🎯 Goal Reached! Stopping vehicle. (Seq: {current_path_seq})")
                 
                 # Plot CTE before resetting

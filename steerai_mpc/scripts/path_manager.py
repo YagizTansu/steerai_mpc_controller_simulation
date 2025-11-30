@@ -28,6 +28,7 @@ class PathManager:
         self.tree = None
         self.path_seq = 0 # Sequence number for path updates
         self.target_speed = 5.0 # Default, will be updated by controller
+        self.path_length = 0.0 # Total length of the path
         
         # Publisher for processed global path visualization
         if self.publish_path:
@@ -138,6 +139,10 @@ class PathManager:
             # Store as [x, y, yaw]
             self.path_data = np.column_stack((x_new, y_new, yaw_new))
             
+            # Calculate Path Length
+            path_diffs = np.diff(self.path_data[:, :2], axis=0)
+            self.path_length = np.sum(np.linalg.norm(path_diffs, axis=1))
+            
             # Build KDTree
             self.tree = KDTree(self.path_data[:, :2])
             
@@ -159,6 +164,9 @@ class PathManager:
 
     def get_path_seq(self):
         return self.path_seq
+
+    def get_path_length(self):
+        return self.path_length
 
     def publish_global_path(self):
         msg = Path()
