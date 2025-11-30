@@ -60,7 +60,7 @@ weights:
   # Too high: aggressive path following, can cause oscillations in turns
   # Too low: vehicle may drift away from path
   # INCREASED for better path tracking
-  position: 25.0
+  position: 15.0
   
   # Heading error weight
   # Range: 0.0 - 100.0
