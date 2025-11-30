@@ -10,7 +10,11 @@ vehicle:
   # Range: 0.1 - 10.0
   # Default: 5.556 m/s (exactly 20 km/h - project requirement)
   # Higher values allow faster driving but may reduce control accuracy
-  v_max: 2.0
+  # Maximum velocity (m/s)
+  # Range: 0.1 - 10.0
+  # Default: 5.556 m/s (exactly 20 km/h - project requirement)
+  # Higher values allow faster driving but may reduce control accuracy
+  v_max: 5.56
   
   # Maximum steering angle (radians)
   # Range: 0.1 - 1.5 rad
@@ -56,7 +60,7 @@ weights:
   # Too high: aggressive path following, can cause oscillations in turns
   # Too low: vehicle may drift away from path
   # INCREASED for better path tracking
-  position: 5.0
+  position: 20.0
   
   # Heading error weight  
   # Range: 0.0 - 100.0
@@ -65,7 +69,7 @@ weights:
   # Too high: vehicle rigidly follows path orientation, may cause jerky motion
   # Too low: vehicle may not align properly with path, especially in curves
   # REDUCED slightly to balance with position weight
-  heading: 10.0
+  heading: 20.0
   
   # Velocity error weight
   # Range: 0.0 - 100.0
@@ -82,7 +86,7 @@ weights:
   # Too high: very smooth but slow steering response, may miss sharp turns
   # Too low: jerky steering, can cause instability
   # REDUCED for faster steering response in path tracking
-  steering_smooth: 1.0
+  steering_smooth: 2.0
   
   # Acceleration smoothness weight
   # Range: 0.0 - 100.0
@@ -163,7 +167,7 @@ control:
   # Default: 5.556 m/s (20 km/h - project requirement)
   # This is the desired speed the MPC will try to maintain
   # Note: Must be <= v_max (vehicle constraint)
-  target_speed: 1.0
+  target_speed: 5.56
   
   # Goal reached tolerance (meters)
   # Range: 0.1 - 2.0
