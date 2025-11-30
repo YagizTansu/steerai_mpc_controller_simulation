@@ -39,8 +39,8 @@ mpc:
   # Longer horizon = better long-term planning but slower solver
   # With dt=0.1, T=10 means 1 second lookahead
   # FIRST-STEP NN: Increased to 12 for better path tracking
-  horizon: 20
-  
+  horizon: 15
+
   # Time step (seconds)
   # Range: 0.01 - 0.5
   # Default: 0.1 seconds (10 Hz)
@@ -60,16 +60,16 @@ weights:
   # Too high: aggressive path following, can cause oscillations in turns
   # Too low: vehicle may drift away from path
   # INCREASED for better path tracking
-  position: 20.0
+  position: 5.0
   
-  # Heading error weight  
+  # Heading error weight
   # Range: 0.0 - 100.0
   # Default: 15.0
   # Penalizes vehicle heading misalignment with path direction
   # Too high: vehicle rigidly follows path orientation, may cause jerky motion
   # Too low: vehicle may not align properly with path, especially in curves
   # REDUCED slightly to balance with position weight
-  heading: 20.0
+  heading: 2.0
   
   # Velocity error weight
   # Range: 0.0 - 100.0
@@ -86,7 +86,7 @@ weights:
   # Too high: very smooth but slow steering response, may miss sharp turns
   # Too low: jerky steering, can cause instability
   # REDUCED for faster steering response in path tracking
-  steering_smooth: 2.0
+  steering_smooth: 50.0
   
   # Acceleration smoothness weight
   # Range: 0.0 - 100.0
@@ -94,7 +94,7 @@ weights:
   # Penalizes rapid changes in velocity commands (delta_velocity)
   # Too high: very smooth acceleration/braking but slow speed changes
   # Too low: jerky speed changes, uncomfortable ride
-  acceleration_smooth: 0.1
+  acceleration_smooth: 0.5
 
 # ============================================================================
 # SOLVER PARAMETERS (IPOPT)
@@ -106,7 +106,7 @@ solver:
   # Range: 10 - 2000
   # Default: 900
   # More iterations = higher chance of finding optimal solution but slower
-  max_iter: 1000
+  max_iter: 500
   
   # Print level (console output verbosity)
   # 0 = silent, 5 = very verbose
@@ -119,25 +119,25 @@ solver:
   # Default: 1e-2 (relaxed for speed)
   # Lower = more accurate but slower
   # Higher = faster but less accurate
-  tol: 1.0e-1
+  tol: 2.0e-1
   
   # Acceptable tolerance (backup stopping criterion)
   # Range: 1e-6 - 1.0
   # Default: 2e-1 (very relaxed)
   # If this tolerance is reached for acceptable_iter iterations, solver stops
-  acceptable_tol: 2.0e-1
+  acceptable_tol: 5.0e-1
   
   # Acceptable iterations
   # Range: 1 - 50
   # Default: 5
   # Number of iterations at acceptable_tol before declaring success
-  acceptable_iter: 5
+  acceptable_iter: 2
   
   # Maximum CPU time per solve (seconds)
   # Range: 0.01 - 1.0
   # Default: 0.09 (90ms)
   # OPTIMIZED: Can be lower now since NN only in first step
-  max_cpu_time: 0.25
+  max_cpu_time: 0.5
 
 # ============================================================================
 # HYBRID DYNAMICS BLENDING
