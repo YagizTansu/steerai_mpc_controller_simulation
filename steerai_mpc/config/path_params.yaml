@@ -76,7 +76,7 @@ velocity_profile:
   # Lower value = slower in turns (safer)
   # Higher value = faster in turns (more aggressive)
   # Default: 1.0
-  a_lat_max: 3.0
+  a_lat_max: 12.0
 
   # Velocity smoothing window size
   # Number of points to average for smooth velocity transitions
