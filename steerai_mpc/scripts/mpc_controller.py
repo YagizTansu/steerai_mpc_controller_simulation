@@ -4,6 +4,8 @@ import rospy
 import numpy as np
 import os
 import sys
+import matplotlib.pyplot as plt
+import datetime
 from ackermann_msgs.msg import AckermannDrive
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
@@ -80,6 +82,11 @@ class MPCController:
         self.total_distance_traveled = 0.0
         self.prev_position = None
         self.last_completed_path_seq = -1
+        
+        # Data recording
+        self.cte_history = []
+        self.time_history = []
+        self.start_time = None
         
         # Dynamic Reconfigure
         self.dyn_reconfig_srv = Server(MPCDynamicParamsConfig, self.dynamic_reconfigure_callback)
@@ -204,6 +211,41 @@ class MPCController:
         
         self.stats_marker_pub.publish(marker)
 
+    def plot_cte(self, seq_id):
+        """Plots and saves the Cross Track Error over time."""
+        if not self.cte_history:
+            rospy.logwarn("No CTE data to plot.")
+            return
+
+        try:
+            plt.figure(figsize=(10, 6))
+            plt.plot(self.time_history, self.cte_history, label='Cross Track Error')
+            plt.axhline(y=0, color='r', linestyle='--', alpha=0.5)
+            plt.xlabel('Time (s)')
+            plt.ylabel('CTE (m)')
+            plt.title(f'Cross Track Error over Time (Path Seq: {seq_id})')
+            plt.grid(True)
+            plt.legend()
+
+            # Save to steerai_mpc/plot_cte directory
+            # Get the path to the steerai_mpc package (parent of scripts dir)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            package_dir = os.path.dirname(script_dir)
+            save_dir = os.path.join(package_dir, 'plot_cte')
+
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"cte_plot_seq_{seq_id}_{timestamp}.png"
+            save_path = os.path.join(save_dir, filename)
+            
+            plt.savefig(save_path)
+            plt.close()
+            rospy.loginfo(f"CTE plot saved to {save_path}")
+        except Exception as e:
+            rospy.logerr(f"Failed to plot CTE: {e}")
+
     def run(self):
         rate = rospy.Rate(self.loop_rate)
         
@@ -235,6 +277,13 @@ class MPCController:
             # Check goal
             if self.path_manager.is_goal_reached(self.current_state[0], self.current_state[1], self.goal_tolerance):
                 rospy.loginfo_throttle(1, f"🎯 Goal Reached! Stopping vehicle. (Seq: {current_path_seq})")
+                
+                # Plot CTE before resetting
+                self.plot_cte(current_path_seq)
+                self.cte_history = []
+                self.time_history = []
+                self.start_time = None
+                
                 self.last_completed_path_seq = current_path_seq
                 msg = AckermannDrive()
                 msg.speed = 0.0
@@ -278,6 +327,13 @@ class MPCController:
             # Debug Info
             cte = self.path_manager.get_cross_track_error(self.current_state[0], self.current_state[1])
             rospy.loginfo_throttle(1, f"MPC: v={cmd_v:.2f}, steer={cmd_steer:.2f}, CTE={cte:.3f}")
+            
+            # Record Data
+            if self.start_time is None:
+                self.start_time = rospy.Time.now().to_sec()
+            
+            self.time_history.append(rospy.Time.now().to_sec() - self.start_time)
+            self.cte_history.append(cte)
             
             # Publish stats
             self.publish_stats_marker(self.current_state[0], self.current_state[1], self.current_state[3])
