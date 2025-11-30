@@ -137,15 +137,27 @@ class DataCollector:
             return 3.0, val
         self.maneuver_manager.add_maneuver("STEP_STEERING", 10.0, step_steering)
         
-        # 6. Random Walk (Exploration)
+        # 6. Random Walk (Exploration) - AGGRESSIVE
+        # Increased duration and amplitude to cover more state space
         def random_walk(t, d):
-            # Randomly perturb speed and steering
-            # Note: This is pseudo-random, deterministic for a given run if seeded, 
-            # but here we use time-based noise
-            noise_steer = random.uniform(-0.5, 0.5)
-            noise_speed = random.uniform(1.5, 4.5)
-            return noise_speed, noise_steer
-        self.maneuver_manager.add_maneuver("RANDOM_WALK", 20.0, random_walk)
+            # Random speed between 1.5 and 5.0 m/s
+            # Change target every 2 seconds
+            seed_v = int(t / 2.0)
+            np.random.seed(seed_v)
+            target_v = 1.5 + np.random.rand() * 3.5
+            
+            # Random steering between -0.5 and 0.5 rad
+            # Change target every 0.5 seconds (more frequent)
+            seed_s = int(t / 0.5)
+            np.random.seed(seed_s)
+            target_s = -0.5 + np.random.rand() * 1.0
+            
+            # Add high frequency noise
+            noise_s = np.random.normal(0, 0.05)
+            
+            return target_v, target_s + noise_s
+            
+        self.maneuver_manager.add_maneuver("RANDOM_WALK", 40.0, random_walk)
         
         # 7. Cooldown
         self.maneuver_manager.add_maneuver("COOLDOWN", 5.0, lambda t, d: (0.0, 0.0))

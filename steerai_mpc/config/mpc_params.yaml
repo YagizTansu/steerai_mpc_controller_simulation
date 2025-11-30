@@ -39,7 +39,7 @@ mpc:
   # Longer horizon = better long-term planning but slower solver
   # With dt=0.1, T=10 means 1 second lookahead
   # FIRST-STEP NN: Increased to 12 for better path tracking
-  horizon: 15
+  horizon: 10
 
   # Time step (seconds)
   # Range: 0.01 - 0.5
