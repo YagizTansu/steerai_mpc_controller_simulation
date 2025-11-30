@@ -21,7 +21,7 @@ interpolation:
   # Default: 0.0 (no smoothing, interpolates exactly through points)
   # Higher values create smoother paths but may deviate from original points
   # Use 0.0 for precise path following, 0.5-2.0 for smoothing noisy paths
-  smoothness: 0.0
+  smoothness: 5.0
   
   # Degree of B-spline curve
   # Range: 1 - 5 (typically 3)
