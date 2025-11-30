@@ -39,7 +39,7 @@ mpc:
   # Longer horizon = better long-term planning but slower solver
   # With dt=0.1, T=10 means 1 second lookahead
   # FIRST-STEP NN: Increased to 12 for better path tracking
-  horizon: 10
+  horizon: 5
 
   # Time step (seconds)
   # Range: 0.01 - 0.5
@@ -69,7 +69,7 @@ weights:
   # Too high: vehicle rigidly follows path orientation, may cause jerky motion
   # Too low: vehicle may not align properly with path, especially in curves
   # REDUCED slightly to balance with position weight
-  heading: 2.0
+  heading: 0.5
   
   # Velocity error weight
   # Range: 0.0 - 100.0

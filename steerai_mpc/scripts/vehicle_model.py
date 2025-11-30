@@ -119,8 +119,8 @@ class VehicleModel:
             
             # Hybrid blending based on vehicle speed
             # alpha=0: pure kinematic (low speed), alpha=1: pure NN (high speed)
-            alpha = ca.fmin(1.0, ca.fmax(0.0, (curr_v - self.v_low) / (self.v_high - self.v_low)))
-            
+            # alpha = ca.fmin(1.0, ca.fmax(0.0, (curr_v - self.v_low) / (self.v_high - self.v_low)))
+            alpha = 1
             next_v_pred = (1 - alpha) * next_v_kin + alpha * next_v_nn
             delta_yaw_pred = (1 - alpha) * delta_yaw_kin + alpha * delta_yaw_nn
         else:
