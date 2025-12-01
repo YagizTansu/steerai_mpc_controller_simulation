@@ -52,7 +52,7 @@ source devel/setup.bash
 3. **Publish the Reference Path:**
    In a new terminal, publish the desired path (e.g., the modified reference path):
    ```bash
-   rosrun steerai_mpc path_publisher.py _path_file:=paths/reference_path_modified.csv
+   rosrun steerai_mpc path_publisher.py _path_file:=paths/reference_path_sim.csv
    ```
    *Note: You can specify any CSV file relative to the package or an absolute path.*
 
@@ -210,5 +210,5 @@ roslaunch gem_gazebo gem_gazebo_rviz.launch
 roslaunch steerai_mpc mpc_controller.launch
 
 # Terminal 3: Path Publisher
-rosrun steerai_mpc path_publisher.py _path_file:=paths/reference_path_modified.csv
+rosrun steerai_mpc path_publisher.py _path_file:=paths/reference_path_sim.csv
 ```
