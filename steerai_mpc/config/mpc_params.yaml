@@ -35,10 +35,10 @@ vehicle:
 mpc:
   # Prediction horizon (number of steps)
   # Range: 5 - 50
-  # Default: 10 steps (reduced from 20 for faster computation)
+  # Default: 5 steps (minimum for guaranteed real-time)
   # Longer horizon = better long-term planning but slower solver
-  # With dt=0.1, T=10 means 1 second lookahead
-  # FIRST-STEP NN: Increased to 12 for better path tracking
+  # With dt=0.1, T=5 means 0.5 second lookahead
+  # CRITICAL: Minimum horizon to prevent CPU timeout
   horizon: 5
 
   # Time step (seconds)
@@ -55,46 +55,46 @@ mpc:
 weights:
   # Position error weight
   # Range: 0.0 - 100.0
-  # Default: 4.0
+  # Default: 10.0
   # Penalizes deviation from reference path (cross-track error)
   # Too high: aggressive path following, can cause oscillations in turns
   # Too low: vehicle may drift away from path
-  # INCREASED for better path tracking
-  position: 2.0
+  # SIMPLIFIED: Higher weight for strong path tracking
+  position: 10.0
   
   # Heading error weight
   # Range: 0.0 - 100.0
-  # Default: 15.0
+  # Default: 5.0
   # Penalizes vehicle heading misalignment with path direction
   # Too high: vehicle rigidly follows path orientation, may cause jerky motion
   # Too low: vehicle may not align properly with path, especially in curves
-  # REDUCED slightly to balance with position weight
-  heading: 0.2
+  # SIMPLIFIED: Lower than position for natural turning
+  heading: 5.0
   
   # Velocity error weight
   # Range: 0.0 - 100.0
-  # Default: 1.0
+  # Default: 0.5
   # Penalizes deviation from target speed
   # Too high: aggressive speed tracking, may sacrifice path following
   # Too low: vehicle may not reach target speed
-  velocity: 0.01
+  velocity: 0.5
   
   # Steering smoothness weight
   # Range: 0.0 - 100.0
-  # Default: 5.0
+  # Default: 50.0
   # Penalizes rapid changes in steering commands (delta_steering)
   # Too high: very smooth but slow steering response, may miss sharp turns
   # Too low: jerky steering, can cause instability
-  # REDUCED for faster steering response in path tracking
-  steering_smooth: 75.0
+  # CRITICAL: Very high to prevent oscillations with short horizon
+  steering_smooth: 50.0
   
   # Acceleration smoothness weight
   # Range: 0.0 - 100.0
-  # Default: 0.1
+  # Default: 5.0
   # Penalizes rapid changes in velocity commands (delta_velocity)
   # Too high: very smooth acceleration/braking but slow speed changes
   # Too low: jerky speed changes, uncomfortable ride
-  acceleration_smooth: 30.0
+  acceleration_smooth: 5.0
 
 # ============================================================================
 # SOLVER PARAMETERS (IPOPT)
@@ -104,9 +104,10 @@ weights:
 solver:
   # Maximum number of iterations
   # Range: 10 - 2000
-  # Default: 900
+  # Default: 300
   # More iterations = higher chance of finding optimal solution but slower
-  max_iter: 500
+  # CRITICAL: Low iterations for guaranteed fast execution
+  max_iter: 300
   
   # Print level (console output verbosity)
   # 0 = silent, 5 = very verbose
@@ -116,28 +117,30 @@ solver:
   
   # Optimality tolerance
   # Range: 1e-6 - 1.0
-  # Default: 1e-2 (relaxed for speed)
+  # Default: 5e-1 (extremely relaxed)
   # Lower = more accurate but slower
   # Higher = faster but less accurate
-  tol: 2.0e-1
+  # CRITICAL: Extremely relaxed to avoid timeout
+  tol: 5.0e-1
   
   # Acceptable tolerance (backup stopping criterion)
   # Range: 1e-6 - 1.0
-  # Default: 2e-1 (very relaxed)
+  # Default: 8e-1 (extremely relaxed)
   # If this tolerance is reached for acceptable_iter iterations, solver stops
-  acceptable_tol: 5.0e-1
+  acceptable_tol: 8.0e-1
   
   # Acceptable iterations
   # Range: 1 - 50
-  # Default: 5
+  # Default: 1
   # Number of iterations at acceptable_tol before declaring success
-  acceptable_iter: 2
+  # CRITICAL: Single iteration acceptance for speed
+  acceptable_iter: 1
   
   # Maximum CPU time per solve (seconds)
   # Range: 0.01 - 1.0
-  # Default: 0.09 (90ms)
-  # OPTIMIZED: Can be lower now since NN only in first step
-  max_cpu_time: 0.5
+  # Default: 0.098 (98ms)
+  # CRITICAL: Near maximum for 10Hz loop (100ms period)
+  max_cpu_time: 0.098
 
 # ============================================================================
 # HYBRID DYNAMICS BLENDING

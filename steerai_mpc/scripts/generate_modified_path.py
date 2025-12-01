@@ -12,12 +12,12 @@ def generate_path():
     # Parameters
     step_size = 0.1  # meters
     
-    # 1. Straight: (-50, 0) to (50, 0)
-    x1 = np.arange(-50, 50, step_size)
+    # 1. Straight: (0, 0) to (50, 0)
+    x1 = np.arange(0, 50, step_size)
     y1 = np.zeros_like(x1)
     
-    # 2. Wide Turn: 180-degree left turn from (50, 0) to (50, 30) (Radius = 15m)
-    # Center of turn is (50, 15)
+    # 2. Wide Turn: 180-degree left turn from (50, 0) to (50, 200) (Radius = 100m)
+    # Center of turn is (50, 100)
     # Angle goes from -pi/2 to pi/2
     radius = 100.0
     center_x1 = 50.0
@@ -31,8 +31,8 @@ def generate_path():
     x3 = np.arange(50, -50, -step_size)
     y3 = np.full_like(x3, 200.0)
     
-    # 4. Wide Turn: 180-degree left turn from (0, 30) to (0, 0) (Radius = 15m)
-    # Center of turn is (0, 15)
+    # 4. Wide Turn: 180-degree left turn from (-50, 200) to (-50, 0) (Radius = 100m)
+    # Center of turn is (-50, 100)
     # Angle goes from pi/2 to 3*pi/2
     center_x2 = -50.0
     center_y2 = 100.0
@@ -40,13 +40,13 @@ def generate_path():
     x4 = center_x2 + radius * np.cos(theta4)
     y4 = center_y2 + radius * np.sin(theta4)
     
-    # 5. Straight: (0, 0) to (20, 0) (Arrival) - REMOVED to make it a perfect loop
-    # x5 = np.arange(0, 20, step_size)
-    # y5 = np.zeros_like(x5)
+    # 5. Straight: (-50, 0) to (0, 0) (Arrival)
+    x5 = np.arange(-50, 0, step_size)
+    y5 = np.zeros_like(x5)
     
     # Concatenate all segments
-    x = np.concatenate([x1, x2, x3, x4])
-    y = np.concatenate([y1, y2, y3, y4])
+    x = np.concatenate([x1, x2, x3, x4, x5])
+    y = np.concatenate([y1, y2, y3, y4, y5])
     
     # Create DataFrame
     df = pd.DataFrame({'curr_x': x, 'curr_y': y})
