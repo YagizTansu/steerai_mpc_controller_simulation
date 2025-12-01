@@ -60,7 +60,7 @@ weights:
   # Too high: aggressive path following, can cause oscillations in turns
   # Too low: vehicle may drift away from path
   # INCREASED for better path tracking
-  position: 0.5
+  position: 1.0
   
   # Heading error weight
   # Range: 0.0 - 100.0
@@ -69,7 +69,7 @@ weights:
   # Too high: vehicle rigidly follows path orientation, may cause jerky motion
   # Too low: vehicle may not align properly with path, especially in curves
   # REDUCED slightly to balance with position weight
-  heading: 0.5
+  heading: 0.2
   
   # Velocity error weight
   # Range: 0.0 - 100.0
@@ -77,7 +77,7 @@ weights:
   # Penalizes deviation from target speed
   # Too high: aggressive speed tracking, may sacrifice path following
   # Too low: vehicle may not reach target speed
-  velocity: 0.1
+  velocity: 0.01
   
   # Steering smoothness weight
   # Range: 0.0 - 100.0
@@ -86,7 +86,7 @@ weights:
   # Too high: very smooth but slow steering response, may miss sharp turns
   # Too low: jerky steering, can cause instability
   # REDUCED for faster steering response in path tracking
-  steering_smooth: 50.0
+  steering_smooth: 75.0
   
   # Acceleration smoothness weight
   # Range: 0.0 - 100.0
@@ -94,7 +94,7 @@ weights:
   # Penalizes rapid changes in velocity commands (delta_velocity)
   # Too high: very smooth acceleration/braking but slow speed changes
   # Too low: jerky speed changes, uncomfortable ride
-  acceleration_smooth: 10.0
+  acceleration_smooth: 30.0
 
 # ============================================================================
 # SOLVER PARAMETERS (IPOPT)
