@@ -14,7 +14,7 @@ class PathPublisher:
         rospy.init_node('path_publisher')
         
         # Parameters
-        self.path_file = rospy.get_param('~path_file', 'paths/reference_path_modified.csv')
+        self.path_file = rospy.get_param('~path_file', 'paths/reference_path_sim.csv')
         self.frame_id = rospy.get_param('~frame_id', 'world')
         self.topic_name = rospy.get_param('~topic_name', '/gem/raw_path')
         
