@@ -58,12 +58,42 @@ source devel/setup.bash
 
 ---
 
-## 2. System Identification
+---
+
+## 2. Data Collection
+
+To train the neural network dynamics model, we first need to collect a diverse dataset covering the vehicle's operating range. The `steerai_data_collector` package provides a script to automatically drive the vehicle through various maneuvers.
+
+### Maneuvers
+The `data_collector.py` script executes a sequence of maneuvers:
+1. **Warmup**: Constant speed driving.
+2. **Chirp Signal (Low Speed)**: Sinusoidal steering with increasing frequency at low speed.
+3. **Ramp Speed**: Linear acceleration and deceleration.
+4. **Chirp Signal (High Speed)**: Sinusoidal steering at high speed.
+5. **Step Inputs**: Step changes in steering angle.
+6. **Random Walk**: Randomized speed and steering commands to explore the state space.
+
+### Running the Data Collector
+1. **Launch the Simulation:**
+   ```bash
+   roslaunch gem_gazebo gem_gazebo_rviz.launch
+   ```
+
+2. **Run the Data Collector:**
+   ```bash
+   rosrun steerai_data_collector data_collector.py
+   ```
+
+The data will be saved as a CSV file in `steerai_data_collector/data/` with a timestamped filename (e.g., `training_data_20231027-120000.csv`).
+
+---
+
+## 3. System Identification
 
 We use a data-driven approach to model the vehicle's dynamics, specifically capturing the complex relationship between control inputs and the vehicle's state updates.
 
 ### Method
-1. **Data Collection**: The `steerai_data_collector` package drives the vehicle using a persistent excitation strategy (sinusoidal steering and varying velocities) to cover the state space.
+1. **Data Collection**: (See Section 2)
 2. **Model Architecture**: A Feed-Forward Neural Network (MLP) is trained using PyTorch.
    - **Inputs**: `[current_speed, cmd_speed, cmd_steering_angle]`
    - **Outputs**: `[next_speed, delta_yaw]` (Change in yaw)
@@ -74,8 +104,8 @@ The model is validated on a hold-out test set (20% of collected data).
 
 - **Metric**: Root Mean Squared Error (RMSE)
 - **Typical Performance**:
-  - Speed RMSE: ~0.02 m/s
-  - Delta Yaw RMSE: ~0.001 rad
+  - Speed RMSE: 0.0442 m/s
+  - Delta Yaw RMSE: 0.0194 rad
 
 **Training Results:**
 The training script generates plots showing the loss curve and prediction performance against ground truth.
@@ -90,7 +120,7 @@ rosrun steerai_sysid train_dynamics.py
 
 ---
 
-## 3. MPC Controller Implementation
+## 4. MPC Controller Implementation
 
 The `steerai_mpc` package implements a nonlinear MPC using **CasADi**.
 
