@@ -143,24 +143,6 @@ solver:
   max_cpu_time: 0.098
 
 # ============================================================================
-# HYBRID DYNAMICS BLENDING
-# Parameters for blending kinematic and neural network dynamics models
-# ============================================================================
-hybrid:
-  # Low speed threshold for pure kinematic model (m/s)
-  # Range: 0.0 - 2.0
-  # Default: 0.5 m/s
-  # Below this speed, only kinematic model is used (alpha=0)
-  v_low: 0.5
-  
-  # High speed threshold for pure neural network model (m/s)
-  # Range: 1.0 - 5.0
-  # Default: 2.0 m/s
-  # Above this speed, only NN model is used (alpha=1)
-  # Between v_low and v_high, models are linearly blended
-  v_high: 2.0
-
-# ============================================================================
 # CONTROL PARAMETERS
 # Behavior settings for the controller
 # ============================================================================

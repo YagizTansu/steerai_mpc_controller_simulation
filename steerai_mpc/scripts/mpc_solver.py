@@ -102,9 +102,8 @@ class MPCSolver:
             curr_state = self.X[:, k]
             control_input = self.U[:, k]
             
-            # Use Hybrid model for first step, Kinematic for rest (Efficiency)
-            use_hybrid = (k == 0)
-            next_state_expr = self.vehicle_model.get_next_state(curr_state, control_input, use_hybrid=use_hybrid)
+            # Use Neural Network model for all steps
+            next_state_expr = self.vehicle_model.get_next_state(curr_state, control_input)
             
             self.opti.subject_to(self.X[:, k+1] == next_state_expr)
             

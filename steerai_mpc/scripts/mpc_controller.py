@@ -31,12 +31,7 @@ class MPCController:
         self.load_parameters()
         
         # Initialize Modules
-        self.vehicle_model = VehicleModel(
-            dt=self.dt, 
-            L=self.L, 
-            v_low=self.v_low, 
-            v_high=self.v_high
-        )
+        self.vehicle_model = VehicleModel(dt=self.dt)
         
         self.path_manager = PathManager(param_namespace='~path_manager')
         # Set initial target speed
@@ -107,8 +102,7 @@ class MPCController:
         # Vehicle
         self.v_max = rospy.get_param(param_ns + 'vehicle/v_max', 5.5)
         self.delta_max = rospy.get_param(param_ns + 'vehicle/delta_max', 0.6)
-        self.L = rospy.get_param(param_ns + 'vehicle/wheelbase', 1.75)
-        
+                
         # MPC
         self.T = rospy.get_param(param_ns + 'mpc/horizon', 20)
         self.dt = rospy.get_param(param_ns + 'mpc/dt', 0.1)
@@ -127,10 +121,6 @@ class MPCController:
         self.solver_acceptable_tol = rospy.get_param(param_ns + 'solver/acceptable_tol', 2e-1)
         self.solver_acceptable_iter = rospy.get_param(param_ns + 'solver/acceptable_iter', 5)
         self.solver_max_cpu_time = rospy.get_param(param_ns + 'solver/max_cpu_time', 0.09)
-        
-        # Hybrid
-        self.v_low = rospy.get_param(param_ns + 'hybrid/v_low', 0.5)
-        self.v_high = rospy.get_param(param_ns + 'hybrid/v_high', 2.0)
         
         # Control
         self.target_speed = rospy.get_param(param_ns + 'control/target_speed', 5.556)
