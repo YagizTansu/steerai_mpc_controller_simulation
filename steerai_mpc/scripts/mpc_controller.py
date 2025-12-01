@@ -210,12 +210,13 @@ class MPCController:
         marker.id = 1
         marker.type = Marker.TEXT_VIEW_FACING
         marker.action = Marker.ADD
-        marker.pose.position.x = robot_x
-        marker.pose.position.y = robot_y + 0.5
-        marker.pose.position.z = 2.0
+        # Fixed position in top-left of the map view
+        marker.pose.position.x = -10.0
+        marker.pose.position.y = 10.0
+        marker.pose.position.z = 5.0
         marker.pose.orientation.w = 1.0
-        marker.scale.z = 0.5
-        marker.color = ColorRGBA(1.0, 1.0, 1.0, 1.0)
+        marker.scale.z = 0.8
+        marker.color = ColorRGBA(1.0, 1.0, 0.0, 1.0)
         marker.text = text_content
         
         self.stats_marker_pub.publish(marker)

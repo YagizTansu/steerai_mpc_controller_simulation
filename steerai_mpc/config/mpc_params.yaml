@@ -55,21 +55,21 @@ mpc:
 weights:
   # Position error weight
   # Range: 0.0 - 100.0
-  # Default: 10.0
+  # Default: 6.0
   # Penalizes deviation from reference path (cross-track error)
   # Too high: aggressive path following, can cause oscillations in turns
   # Too low: vehicle may drift away from path
-  # SIMPLIFIED: Higher weight for strong path tracking
-  position: 10.0
+  # SMOOTH: Reduced to prevent micro-corrections
+  position: 6.0
   
   # Heading error weight
   # Range: 0.0 - 100.0
-  # Default: 5.0
+  # Default: 8.0
   # Penalizes vehicle heading misalignment with path direction
   # Too high: vehicle rigidly follows path orientation, may cause jerky motion
   # Too low: vehicle may not align properly with path, especially in curves
-  # SIMPLIFIED: Lower than position for natural turning
-  heading: 5.0
+  # SMOOTH: Increased for stable heading control
+  heading: 8.0
   
   # Velocity error weight
   # Range: 0.0 - 100.0
@@ -81,12 +81,12 @@ weights:
   
   # Steering smoothness weight
   # Range: 0.0 - 100.0
-  # Default: 50.0
+  # Default: 80.0
   # Penalizes rapid changes in steering commands (delta_steering)
   # Too high: very smooth but slow steering response, may miss sharp turns
   # Too low: jerky steering, can cause instability
-  # CRITICAL: Very high to prevent oscillations with short horizon
-  steering_smooth: 50.0
+  # SMOOTH: Very high (80) to eliminate steering chatter completely
+  steering_smooth: 80.0
   
   # Acceleration smoothness weight
   # Range: 0.0 - 100.0

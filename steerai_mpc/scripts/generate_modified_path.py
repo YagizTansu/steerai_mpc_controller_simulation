@@ -40,8 +40,8 @@ def generate_path():
     x4 = center_x2 + radius * np.cos(theta4)
     y4 = center_y2 + radius * np.sin(theta4)
     
-    # 5. Straight: (-50, 0) to (0, 0) (Arrival)
-    x5 = np.arange(-50, 0, step_size)
+    # 5. Straight: (-50, 0) to (-10, 0) (Arrival)
+    x5 = np.arange(-50, -5, step_size)
     y5 = np.zeros_like(x5)
     
     # Concatenate all segments
