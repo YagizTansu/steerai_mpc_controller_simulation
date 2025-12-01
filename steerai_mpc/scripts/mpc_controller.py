@@ -204,7 +204,7 @@ class MPCController:
         )
         
         marker = Marker()
-        marker.header.frame_id = "world"
+        marker.header.frame_id = "base_footprint"
         marker.header.stamp = rospy.Time.now()
         marker.ns = "robot_stats"
         marker.id = 1

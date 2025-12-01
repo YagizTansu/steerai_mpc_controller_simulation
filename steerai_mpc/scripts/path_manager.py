@@ -64,8 +64,12 @@ class PathManager:
             self.param_namespace + '/velocity_profile/smoothing_window', 20)
         self.v_min = rospy.get_param(
             self.param_namespace + '/velocity_profile/v_min', 1.0)
+        self.accel_dist = rospy.get_param(
+            self.param_namespace + '/velocity_profile/accel_dist', 15.0)
+        self.initial_speed = rospy.get_param(
+            self.param_namespace + '/velocity_profile/initial_speed', 1.0)
         
-        rospy.loginfo(f"PathManager Params: a_lat_max={self.a_lat_max}, window={self.smoothing_window}, v_min={self.v_min}")
+        rospy.loginfo(f"PathManager Params: a_lat_max={self.a_lat_max}, window={self.smoothing_window}, v_min={self.v_min}, accel_dist={self.accel_dist}, initial_speed={self.initial_speed}")
         
         # Visualization parameters
         self.frame_id = rospy.get_param(
@@ -222,6 +226,29 @@ class PathManager:
         kernel = np.ones(window_size) / window_size
         v_profile = np.convolve(v_profile, kernel, mode='same')
         
+        # Acceleration at the start
+        accel_dist = self.accel_dist  # meters
+        initial_speed = self.initial_speed  # m/s
+        
+        # Calculate cumulative distance from start
+        dist_from_start = 0.0
+        for i in range(len(self.path_data)):
+            if i > 0:
+                p1 = self.path_data[i-1]
+                p2 = self.path_data[i]
+                d = np.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+                dist_from_start += d
+            
+            if dist_from_start > accel_dist:
+                break
+            
+            # Linear ramp up from initial_speed to target_speed
+            ratio = dist_from_start / accel_dist
+            target_v = initial_speed + (self.target_speed - initial_speed) * ratio
+            
+            # Take minimum of existing profile and acceleration ramp
+            v_profile[i] = min(v_profile[i], target_v)
+        
         # Deceleration at the end
         decel_dist = 10.0 # meters
         final_speed = 0.0
@@ -246,7 +273,7 @@ class PathManager:
             v_profile[i] = min(v_profile[i], target_v)
 
         self.path_velocities = v_profile
-        rospy.loginfo(f"Velocity profile generated with max speed {self.target_speed:.2f} m/s and deceleration over last {decel_dist}m.")
+        rospy.loginfo(f"Velocity profile generated: initial_speed={self.initial_speed:.2f} m/s, max_speed={self.target_speed:.2f} m/s, accel_dist={self.accel_dist:.1f}m, decel_dist={decel_dist:.1f}m")
         
         # Print details
         self.print_path_details()
