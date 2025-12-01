@@ -47,7 +47,14 @@ source devel/setup.bash
    ```bash
    roslaunch steerai_mpc mpc_controller.launch
    ```
-   *Note: Ensure you have a trained model before running the controller.*
+   *Note: The controller will start and wait for a path to be published on `/gem/raw_path`.*
+
+3. **Publish the Reference Path:**
+   In a new terminal, publish the desired path (e.g., the modified reference path):
+   ```bash
+   rosrun steerai_mpc path_publisher.py _path_file:=paths/reference_path_modified.csv
+   ```
+   *Note: You can specify any CSV file relative to the package or an absolute path.*
 
 ---
 
@@ -88,21 +95,26 @@ rosrun steerai_sysid train_dynamics.py
 The `steerai_mpc` package implements a nonlinear MPC using **CasADi**.
 
 ### Hybrid Dynamics Model
-To ensure stability at low speeds and accuracy at high speeds, the controller uses a **Hybrid Model**:
-- **Low Speed (< 0.5 m/s)**: Uses a Kinematic Bicycle Model.
-- **High Speed (> 2.0 m/s)**: Uses the learned Neural Network Model.
-- **Transition**: A smooth linear blending (`alpha`) is applied between the two models based on current velocity.
+To ensure stability at low speeds and accuracy at high speeds, the controller uses a **Hybrid Model** controlled by a blending parameter $\alpha$:
+
+- **$\alpha = 0$ (Kinematic)**: Uses a Kinematic Bicycle Model. Ideal for low speeds.
+- **$\alpha = 1$ (Neural Network)**: Uses the learned Neural Network Model. Ideal for high speeds where dynamics are complex.
+- **Hybrid (Blended)**: A smooth linear blending is applied between the two models based on current velocity ($v_{low}$ to $v_{high}$).
+
+$$
+f_{hybrid}(x, u) = (1 - \alpha) \cdot f_{kin}(x, u) + \alpha \cdot f_{nn}(x, u)
+$$
 
 ### Optimization Problem
 The MPC solves the following optimization problem at 10 Hz with a prediction horizon of **20 steps** (2.0 seconds):
 
 **Cost Function:**
-Minimize $J = \sum_{k=0}^{T} (w_{pos} \cdot e_{pos}^2 + w_{head} \cdot e_{head}^2 + w_{vel} \cdot e_{vel}^2 + w_{steer} \cdot \Delta \delta^2)$
+Minimize $J = \sum_{k=0}^{T} (w_{pos} \cdot e_{pos}^2 + w_{head} \cdot (1 - \cos(e_{head})) + w_{vel} \cdot e_{vel}^2 + w_{steer} \cdot \Delta \delta^2 + w_{acc} \cdot \Delta v^2)$
 
 - **Cross-Track Error ($e_{pos}$)**: Deviation from the reference path.
-- **Heading Error ($e_{head}$)**: Deviation from the path's tangent.
+- **Heading Error ($e_{head}$)**: Deviation from the path's tangent (using robust cosine loss).
 - **Speed Error ($e_{vel}$)**: Deviation from the target reference speed.
-- **Control Effort**: Penalties on rapid changes in steering and acceleration for smoothness.
+- **Control Effort**: Penalties on rapid changes in steering ($\Delta \delta$) and acceleration ($\Delta v$) for smoothness.
 
 **Constraints:**
 - **Actuator Limits**:
@@ -159,8 +171,14 @@ docker run -it --rm \
     steerai
 ```
 
-Inside the container, you can run the standard launch commands:
+Inside the container, you can run the standard launch commands (in separate terminals):
 ```bash
+# Terminal 1: Simulation
 roslaunch gem_gazebo gem_gazebo_rviz.launch
+
+# Terminal 2: MPC Controller
 roslaunch steerai_mpc mpc_controller.launch
+
+# Terminal 3: Path Publisher
+rosrun steerai_mpc path_publisher.py _path_file:=paths/reference_path_modified.csv
 ```
