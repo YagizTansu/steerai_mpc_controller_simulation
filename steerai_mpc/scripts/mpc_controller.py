@@ -309,6 +309,7 @@ class MPCController:
             # Use the last command sent to predict current state
             predicted_state = self.vehicle_model.predict_next_state_numpy(
                 self.current_state, 
+                self.current_yaw_rate,
                 self.last_cmd
             )
             

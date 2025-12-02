@@ -95,17 +95,17 @@ We use a data-driven approach to model the vehicle's dynamics, specifically capt
 ### Method
 1. **Data Collection**: (See Section 2)
 2. **Model Architecture**: A Feed-Forward Neural Network (MLP) is trained using PyTorch.
-   - **Inputs**: `[current_speed, cmd_speed, cmd_steering_angle]`
-   - **Outputs**: `[next_speed, delta_yaw]` (Change in yaw)
-   - **Structure**: Input Layer (3) -> Hidden Layer (64, ReLU) -> Hidden Layer (64, ReLU) -> Output Layer (2)
+    - **Inputs**: `[current_speed, current_yaw_rate, cmd_speed, cmd_steering_angle]`
+    - **Outputs**: `[delta_speed, delta_yaw]` (Change in speed and yaw)
+    - **Structure**: Input Layer (4) -> Hidden Layer (64, Softplus) -> Hidden Layer (64, Softplus) -> Output Layer (2)
 
 ### Validation & Accuracy
 The model is validated on a hold-out test set (20% of collected data).
 
 - **Metric**: Root Mean Squared Error (RMSE)
 - **Typical Performance**:
-  - Speed RMSE: 0.0442 m/s
-  - Delta Yaw RMSE: 0.0194 rad
+  - Speed RMSE: 0.0130 m/s
+  - Delta Yaw RMSE: 0.0035 rad
 
 **Training Results:**
 The training script generates plots showing the loss curve and prediction performance against ground truth.
@@ -124,16 +124,12 @@ rosrun steerai_sysid train_dynamics.py
 
 The `steerai_mpc` package implements a nonlinear MPC using **CasADi**.
 
-### Hybrid Dynamics Model
-To ensure stability at low speeds and accuracy at high speeds, the controller uses a **Hybrid Model** controlled by a blending parameter $\alpha$:
+### Neural Network Dynamics Model
+The controller uses a learned **Neural Network Model** to predict the vehicle's future state. This model captures complex non-linear dynamics that are difficult to model analytically, such as tire slip and friction.
 
-- **$\alpha = 0$ (Kinematic)**: Uses a Kinematic Bicycle Model. Ideal for low speeds.
-- **$\alpha = 1$ (Neural Network)**: Uses the learned Neural Network Model. Ideal for high speeds where dynamics are complex.
-- **Hybrid (Blended)**: A smooth linear blending is applied between the two models based on current velocity ($v_{low}$ to $v_{high}$).
-
-$$
-f_{hybrid}(x, u) = (1 - \alpha) \cdot f_{kin}(x, u) + \alpha \cdot f_{nn}(x, u)
-$$
+- **Model Type**: Feed-Forward Neural Network (MLP)
+- **Integration**: The network predicts the *change* in state ($\Delta v, \Delta \psi$) given the current state and control inputs.
+- **Delay Compensation**: The same neural network is used to predict the vehicle's state after the control delay period, ensuring consistency between prediction and planning.
 
 ### Optimization Problem
 The MPC solves the following optimization problem at 10 Hz with a prediction horizon of **20 steps** (2.0 seconds):

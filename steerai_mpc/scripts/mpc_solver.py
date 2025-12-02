@@ -102,8 +102,15 @@ class MPCSolver:
             curr_state = self.X[:, k]
             control_input = self.U[:, k]
             
+            # Estimate yaw_rate kinematically for the model input
+            # yaw_rate = v * tan(delta) / L
+            L = 1.75
+            v = curr_state[3]
+            delta = control_input[1]
+            yaw_rate = v * ca.tan(delta) / L
+            
             # Use Neural Network model for all steps
-            next_state_expr = self.vehicle_model.get_next_state(curr_state, control_input)
+            next_state_expr = self.vehicle_model.get_next_state(curr_state, yaw_rate, control_input)
             
             self.opti.subject_to(self.X[:, k+1] == next_state_expr)
             
