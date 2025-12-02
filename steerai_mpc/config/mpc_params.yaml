@@ -33,7 +33,7 @@ mpc:
   # Longer horizon = better long-term planning but slower solver
   # With dt=0.1, T=5 means 0.5 second lookahead
   # CRITICAL: Minimum horizon to prevent CPU timeout
-  horizon: 5
+  horizon: 25
 
   # Time step (seconds)
   # Range: 0.01 - 0.5

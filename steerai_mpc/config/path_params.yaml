@@ -11,7 +11,7 @@ interpolation:
   # Default: 0.0 (no smoothing, interpolates exactly through points)
   # Higher values create smoother paths but may deviate from original points
   # Use 0.0 for precise path following, 0.5-2.0 for smoothing noisy paths
-  smoothness: 1.0
+  smoothness: 3.0
   
   # Degree of B-spline curve
   # Range: 1 - 5 (typically 3)
@@ -66,7 +66,7 @@ velocity_profile:
   # Lower value = slower in turns (safer)
   # Higher value = faster in turns (more aggressive)
   # Default: 1.0
-  a_lat_max: 1.0
+  a_lat_max: 0.1
 
   # Velocity smoothing window size
   # Number of points to average for smooth velocity transitions
@@ -78,7 +78,7 @@ velocity_profile:
   # The lowest speed the vehicle is allowed to plan for (except stopping)
   # Prevents vehicle from stopping completely in very sharp turns
   # Default: 1.0
-  v_min: 0.5
+  v_min: 0.2
 
   # ---- ACCELERATION PHASE (Start) ----
   # Acceleration distance from the start (meters)
