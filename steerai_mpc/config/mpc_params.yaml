@@ -29,11 +29,11 @@ vehicle:
 mpc:
   # Prediction horizon (number of steps)
   # Range: 5 - 50
-  # Default: 5 steps (minimum for guaranteed real-time)
+  # Default: 15 steps (balanced for CTE constraint)
   # Longer horizon = better long-term planning but slower solver
-  # With dt=0.1, T=5 means 0.5 second lookahead
-  # CRITICAL: Minimum horizon to prevent CPU timeout
-  horizon: 25
+  # With dt=0.1, T=15 means 1.5 second lookahead
+  # CRITICAL: Reduced for CTE constraint computational load
+  horizon: 15
 
   # Time step (seconds)
   # Range: 0.01 - 0.5
@@ -98,10 +98,10 @@ weights:
 solver:
   # Maximum number of iterations
   # Range: 10 - 2000
-  # Default: 300
+  # Default: 150
   # More iterations = higher chance of finding optimal solution but slower
-  # CRITICAL: Low iterations for guaranteed fast execution
-  max_iter: 300
+  # CRITICAL: Reduced for CTE constraint to prevent timeout
+  max_iter: 150
   
   # Print level (console output verbosity)
   # 0 = silent, 5 = very verbose
@@ -111,17 +111,17 @@ solver:
   
   # Optimality tolerance
   # Range: 1e-6 - 1.0
-  # Default: 5e-1 (extremely relaxed)
+  # Default: 1.0 (maximum relaxation for CTE constraint)
   # Lower = more accurate but slower
   # Higher = faster but less accurate
-  # CRITICAL: Extremely relaxed to avoid timeout
-  tol: 5.0e-1
+  # CRITICAL: Maximum relaxation for CTE constraint
+  tol: 1.0
   
   # Acceptable tolerance (backup stopping criterion)
   # Range: 1e-6 - 1.0
-  # Default: 8e-1 (extremely relaxed)
+  # Default: 1.5 (maximum relaxation)
   # If this tolerance is reached for acceptable_iter iterations, solver stops
-  acceptable_tol: 8.0e-1
+  acceptable_tol: 1.5
   
   # Acceptable iterations
   # Range: 1 - 50
@@ -132,9 +132,9 @@ solver:
   
   # Maximum CPU time per solve (seconds)
   # Range: 0.01 - 1.0
-  # Default: 0.098 (98ms)
-  # CRITICAL: Near maximum for 10Hz loop (100ms period)
-  max_cpu_time: 0.098
+  # Default: 0.095 (95ms - allowing margin for CTE constraint)
+  # CRITICAL: Increased for CTE constraint complexity
+  max_cpu_time: 0.095
 
 # ============================================================================
 # CONTROL PARAMETERS

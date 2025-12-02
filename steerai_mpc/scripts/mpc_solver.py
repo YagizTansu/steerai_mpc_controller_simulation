@@ -84,6 +84,14 @@ class MPCSolver:
             obj += self.W_head * (1 - ca.cos(yaw_err)) # Robust heading error
             obj += self.W_vel * v_err**2
             
+            # Soft CTE Constraint - Exponential Penalty for violations
+            if 'cte_max' in self.params['constraints']:
+                cte_max = self.params['constraints']['cte_max']
+                position_error = ca.sqrt(x_err**2 + y_err**2)
+                # Smooth penalty that increases exponentially beyond limit
+                cte_penalty = ca.fmax(0, position_error - cte_max)**2
+                obj += 1000.0 * cte_penalty  # Very high penalty weight
+            
             # Control Effort / Smoothness
             if k > 0:
                 obj += self.W_steer * (self.U[1, k] - self.U[1, k-1])**2

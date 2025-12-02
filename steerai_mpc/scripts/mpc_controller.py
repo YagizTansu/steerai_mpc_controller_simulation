@@ -43,7 +43,8 @@ class MPCController:
             'dt': self.dt,
             'constraints': {
                 'v_max': self.v_max,
-                'delta_max': self.delta_max
+                'delta_max': self.delta_max,
+                'cte_max': self.cte_max
             },
             'weights': {
                 'position': self.weight_position,
@@ -91,6 +92,10 @@ class MPCController:
         self.time_history = []
         self.start_time = None
         
+        # CTE monitoring
+        self.cte_violations = 0
+        self.max_cte = 0.0
+        
         # Dynamic Reconfigure
         self.dyn_reconfig_srv = Server(MPCDynamicParamsConfig, self.dynamic_reconfigure_callback)
         
@@ -103,6 +108,7 @@ class MPCController:
         # Vehicle
         self.v_max = rospy.get_param(param_ns + 'vehicle/v_max', 5.5)
         self.delta_max = rospy.get_param(param_ns + 'vehicle/delta_max', 0.6)
+        self.cte_max = rospy.get_param(param_ns + 'vehicle/cte_max', 1.0)
                 
         # MPC
         self.T = rospy.get_param(param_ns + 'mpc/horizon', 20)
@@ -222,6 +228,8 @@ class MPCController:
             plt.figure(figsize=(10, 6))
             plt.plot(self.time_history, self.cte_history, label='Cross Track Error')
             plt.axhline(y=0, color='r', linestyle='--', alpha=0.5)
+            plt.axhline(y=self.cte_max, color='orange', linestyle='--', alpha=0.7, label=f'CTE Limit ({self.cte_max}m)')
+            plt.axhline(y=-self.cte_max, color='orange', linestyle='--', alpha=0.7)
             plt.xlabel('Time (s)')
             plt.ylabel('CTE (m)')
             plt.title(f'Cross Track Error over Time (Path Seq: {seq_id})')
@@ -243,7 +251,16 @@ class MPCController:
             
             plt.savefig(save_path)
             plt.close()
+            
+            # Log CTE statistics
+            cte_array = np.array(self.cte_history)
+            mean_cte = np.mean(np.abs(cte_array))
+            std_cte = np.std(cte_array)
+            max_cte = np.max(np.abs(cte_array))
+            
             rospy.loginfo(f"CTE plot saved to {save_path}")
+            rospy.loginfo(f"CTE Statistics - Mean: {mean_cte:.3f}m, Std: {std_cte:.3f}m, Max: {max_cte:.3f}m")
+            rospy.loginfo(f"CTE Violations (>{self.cte_max}m): {self.cte_violations}")
         except Exception as e:
             rospy.logerr(f"Failed to plot CTE: {e}")
 
@@ -296,6 +313,8 @@ class MPCController:
                 self.cte_history = []
                 self.time_history = []
                 self.start_time = None
+                self.cte_violations = 0
+                self.max_cte = 0.0
                 
                 self.last_completed_path_seq = current_path_seq
                 msg = AckermannDrive()
@@ -338,7 +357,17 @@ class MPCController:
             
             # Debug Info
             cte = self.path_manager.get_cross_track_error(self.current_state[0], self.current_state[1])
-            rospy.loginfo_throttle(1, f"MPC: v={cmd_v:.2f}, steer={cmd_steer:.2f}, CTE={cte:.3f}")
+            
+            # Monitor CTE violations
+            abs_cte = abs(cte)
+            if abs_cte > self.cte_max:
+                self.cte_violations += 1
+                rospy.logwarn_throttle(2, f"⚠️  CTE VIOLATION: {abs_cte:.3f}m > {self.cte_max}m (Total: {self.cte_violations})")
+            
+            if abs_cte > self.max_cte:
+                self.max_cte = abs_cte
+            
+            rospy.loginfo_throttle(1, f"MPC: v={cmd_v:.2f}, steer={cmd_steer:.2f}, CTE={cte:.3f}, MaxCTE={self.max_cte:.3f}")
             
             # Record Data
             if self.start_time is None:
