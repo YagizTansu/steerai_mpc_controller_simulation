@@ -21,12 +21,6 @@ vehicle:
   # Default: 0.6 rad (~34 degrees)
   # This limits how sharply the vehicle can turn
   delta_max: 0.6
-  
-  # Wheelbase length (meters)
-  # Distance between front and rear axles
-  # Default: 1.75 m (POLARIS GEM e2 specification)
-  # This is a physical constant of the vehicle
-  wheelbase: 1.75
 
 # ============================================================================
 # MPC PARAMETERS
