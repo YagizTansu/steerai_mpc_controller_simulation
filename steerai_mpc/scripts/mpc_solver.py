@@ -37,11 +37,6 @@ class MPCSolver:
     def update_weights(self, new_weights):
         """Update cost function weights dynamically."""
         self.weights.update(new_weights)
-        # Note: In CasADi Opti, if weights are parameters, we can update them.
-        # If they are constants baked into the graph, we might need to rebuild.
-        # For simplicity/performance, we'll treat them as parameters if we want fast updates,
-        # or just update the class dict and let the next solve use them if we rebuild (which is slow).
-        # BETTER APPROACH: Make weights CasADi parameters.
         
         # Update parameter values in the optimizer
         self.opti.set_value(self.W_pos, self.weights['position'])

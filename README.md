@@ -146,7 +146,7 @@ Minimize $J = \sum_{k=0}^{T} (w_{pos} \cdot e_{pos}^2 + w_{head} \cdot (1 - \cos
 - **Actuator Limits**:
   - Speed: $[-5.5, 5.5]$ m/s
   - Steering Angle: $[-0.6, 0.6]$ rad
-- **Dynamics**: The vehicle state must evolve according to the Hybrid Dynamics Model.
+- **Dynamics**: The vehicle state must evolve according to the Neural Network Dynamics Model.
 
 ### Path Following
 The controller receives a global path (waypoints) and uses a **KDTree** for efficient nearest-neighbor search to find the local reference trajectory at each time step.
