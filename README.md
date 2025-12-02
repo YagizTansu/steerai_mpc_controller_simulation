@@ -31,7 +31,7 @@ This project implements a learning-based Model Predictive Controller (MPC) for t
 Clone the repository into your catkin workspace and build:
 ```bash
 cd ~/catkin_ws/src
-# Clone this repository
+git clone https://github.com/YagizTansu/steerai_mpc_controller_simulation.git
 cd ~/catkin_ws
 catkin_make
 source devel/setup.bash
