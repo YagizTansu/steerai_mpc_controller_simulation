@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Path Generator Script
-Bu script ile farklı geometrik şekiller kullanarak path oluşturabilirsiniz.
+You can create paths using different geometric shapes with this script.
 """
 
 import numpy as np
@@ -16,7 +16,7 @@ class PathGenerator:
         self.y_points = []
     
     def add_straight(self, length, num_points=20):
-        """Düz bir yol ekle"""
+        """Add a straight path"""
         if len(self.x_points) == 0:
             start_x, start_y = 0.0, 0.0
         else:
@@ -28,10 +28,10 @@ class PathGenerator:
         
         self.x_points.extend(x.tolist())
         self.y_points.extend(y.tolist())
-        print(f"Düz yol eklendi: {length}m, {num_points} nokta")
+        print(f"Straight path added: {length}m, {num_points} points")
     
     def add_sine_curve(self, length, amplitude, frequency, num_points=50):
-        """Sinüs eğrisi ekle"""
+        """Add a sine curve"""
         if len(self.x_points) == 0:
             start_x, start_y = 0.0, 0.0
         else:
@@ -43,10 +43,10 @@ class PathGenerator:
         
         self.x_points.extend((x + start_x).tolist())
         self.y_points.extend((y + start_y).tolist())
-        print(f"Sinüs eğrisi eklendi: uzunluk={length}m, genlik={amplitude}m, frekans={frequency}")
+        print(f"Sine curve added: length={length}m, amplitude={amplitude}m, frequency={frequency}")
     
     def add_circular_arc(self, radius, angle_degrees, num_points=30, direction='left'):
-        """Dairesel yay ekle (angle_degrees: 0-360 arası)"""
+        """Add a circular arc (angle_degrees: between 0-360)"""
         if len(self.x_points) == 0:
             start_x, start_y = 0.0, 0.0
         else:
@@ -57,13 +57,13 @@ class PathGenerator:
         theta = np.linspace(0, angle_rad, num_points)
         
         if direction == 'left':
-            # Sola dönüş
+            # Left turn
             center_x = start_x
             center_y = start_y + radius
             x = center_x + radius * np.sin(theta)
             y = center_y - radius * np.cos(theta)
         else:
-            # Sağa dönüş
+            # Right turn
             center_x = start_x
             center_y = start_y - radius
             x = center_x + radius * np.sin(theta)
@@ -71,10 +71,10 @@ class PathGenerator:
         
         self.x_points.extend(x.tolist())
         self.y_points.extend(y.tolist())
-        print(f"Dairesel yay eklendi: yarıçap={radius}m, açı={angle_degrees}°, yön={direction}")
+        print(f"Circular arc added: radius={radius}m, angle={angle_degrees}°, direction={direction}")
     
     def add_s_curve(self, length, amplitude, num_points=50):
-        """S eğrisi ekle"""
+        """Add an S-curve"""
         if len(self.x_points) == 0:
             start_x, start_y = 0.0, 0.0
         else:
@@ -82,12 +82,12 @@ class PathGenerator:
             start_y = self.y_points[-1]
         
         x = np.linspace(0, length, num_points)
-        # S-curve: tanh fonksiyonu kullanarak
+        # S-curve: using tanh function
         y = amplitude * np.tanh(4 * (x/length - 0.5))
         
         self.x_points.extend((x + start_x).tolist())
         self.y_points.extend((y + start_y).tolist())
-        print(f"S eğrisi eklendi: uzunluk={length}m, genlik={amplitude}m")
+        print(f"S-curve added: length={length}m, amplitude={amplitude}m")
     
     def add_chicane(self, length, amplitude, num_curves=2, num_points=50):
         """Chicane (zigzag) ekle"""
@@ -102,10 +102,10 @@ class PathGenerator:
         
         self.x_points.extend((x + start_x).tolist())
         self.y_points.extend((y + start_y).tolist())
-        print(f"Chicane eklendi: uzunluk={length}m, genlik={amplitude}m, viraj sayısı={num_curves}")
+        print(f"Chicane added: length={length}m, amplitude={amplitude}m, number of curves={num_curves}")
     
     def add_spiral(self, turns, max_radius, num_points=100):
-        """Spiral ekle"""
+        """Add a spiral"""
         if len(self.x_points) == 0:
             start_x, start_y = 0.0, 0.0
         else:
@@ -120,21 +120,21 @@ class PathGenerator:
         
         self.x_points.extend(x.tolist())
         self.y_points.extend(y.tolist())
-        print(f"Spiral eklendi: dönüş={turns}, max yarıçap={max_radius}m")
+        print(f"Spiral added: turns={turns}, max radius={max_radius}m")
     
     def add_hairpin(self, radius, num_points=40):
-        """Hairpin (180 derece dönüş) ekle"""
+        """Add a hairpin (180 degree turn)"""
         self.add_circular_arc(radius, 180, num_points, direction='left')
-        print(f"Hairpin eklendi: yarıçap={radius}m")
+        print(f"Hairpin added: radius={radius}m")
     
     def clear(self):
-        """Tüm path'i temizle"""
+        """Clear the entire path"""
         self.x_points.clear()
         self.y_points.clear()
-        print("Path temizlendi")
+        print("Path cleared")
     
     def save_to_csv(self, filename):
-        """Path'i CSV dosyasına kaydet"""
+        """Save path to CSV file"""
         # Ensure the paths directory exists
         dir_path = os.path.dirname(filename)
         if dir_path and not os.path.exists(dir_path):
@@ -146,11 +146,11 @@ class PathGenerator:
             for x, y in zip(self.x_points, self.y_points):
                 writer.writerow([x, y])
         
-        print(f"\nPath kaydedildi: {filename}")
-        print(f"Toplam nokta sayısı: {len(self.x_points)}")
+        print(f"\nPath saved: {filename}")
+        print(f"Total number of points: {len(self.x_points)}")
     
     def plot(self, show_points=False, save_fig=None):
-        """Path'i görselleştir"""
+        """Visualize the path"""
         plt.figure(figsize=(12, 8))
         
         if show_points:
@@ -159,7 +159,7 @@ class PathGenerator:
         else:
             plt.plot(self.x_points, self.y_points, 'b-', linewidth=2, label='Path')
         
-        # Start ve end noktalarını işaretle
+        # Mark start and end points
         if len(self.x_points) > 0:
             plt.plot(self.x_points[0], self.y_points[0], 'go', markersize=10, label='Start')
             plt.plot(self.x_points[-1], self.y_points[-1], 'ro', markersize=10, label='End')
@@ -173,63 +173,71 @@ class PathGenerator:
         
         if save_fig:
             plt.savefig(save_fig, dpi=150, bbox_inches='tight')
-            print(f"Görsel kaydedildi: {save_fig}")
+            print(f"Figure saved: {save_fig}")
         
         plt.show()
 
 
 # ============================================================================
-# ÖRNEK KULLANIM - İstediğiniz gibi modifiye edebilirsiniz!
+# EXAMPLE USAGE - You can modify it as you wish!
 # ============================================================================
 
 if __name__ == "__main__":
-    # Path generator oluştur
+    # Create path generator
     pg = PathGenerator()
     
-    # ========== SENARYO 1: Karmaşık Test Parkuru (Varsayılan) ==========
-    print("\n=== Path Oluşturuluyor ===\n")
+    # ========== SCENARIO 1: Complex Test Track (Default) ==========
+    print("\n=== Creating Path ===")
     
-    # Başlangıç düz yol
-    pg.add_straight(length=20, num_points=20)
+    # Initial straight path
+    pg.add_straight(length=15, num_points=20)
     
-    # Sinüs eğrisi (hafif kıvrımlı)
+    # Sine curve (slight curves)
     pg.add_sine_curve(length=20, amplitude=3, frequency=1, num_points=40)
     
-    # Düz yol
+    # Straight path
     pg.add_straight(length=20, num_points=20)
-    
-    # S-curve (keskin)
-    pg.add_s_curve(length=20, amplitude=3, num_points=30)
     
     # Chicane (zigzag)
-    pg.add_chicane(length=20, amplitude=4, num_curves=1, num_points=40)
+    pg.add_chicane(length=20, amplitude=3, num_curves=1, num_points=40)
     
-    # Hairpin dönüş
+    pg.add_straight(length=5, num_points=20)
+
+    # Hairpin turn
     pg.add_hairpin(radius=13, num_points=40)
     
-    # Düz yol
+    # Straight path
     pg.add_straight(length=-15, num_points=30)
     
-    # Dairesel viraj
-    pg.add_circular_arc(radius=10, angle_degrees=-90, num_points=30, direction='left')
+    # Circular turn
+    pg.add_circular_arc(radius=10, angle_degrees=-360, num_points=30, direction='left')
     
-    # Düz yol
-    pg.add_straight(length=20, num_points=20)
+    pg.add_straight(length=-20, num_points=30)
+
+    pg.add_chicane(length=-20, amplitude=3, num_curves=1, num_points=40)
     
-    # Path'i kaydet ve görselleştir
-    print("\n=== İşlem Tamamlanıyor ===\n")
+    pg.add_sine_curve(length=-30, amplitude=3 , frequency=1, num_points=40)
+
+    pg.add_circular_arc(radius=13, angle_degrees=-180, num_points=30, direction='right')
+
+
+    # Straight path
+    # pg.add_straight(length=20, num_points=20)
     
-    # CSV olarak kaydet
+    # Save and visualize the path
+    print("\n=== Finalizing ===")
+    
+    # Save as CSV
     script_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(script_dir, '../paths/reference_path_generated.csv')
     pg.save_to_csv(csv_path)
     
-    # Görseli kaydet
+    # Save the figuree
     fig_path = os.path.join(script_dir, '../paths/reference_path_generated.png')
     
-    # Plot et
+    # Plot
     pg.plot(show_points=False, save_fig=fig_path)
     
-    print("\n=== Tamamlandı! ===")
+    print("\n=== Completed! ===")
     print(f"CSV: {csv_path}")
     print(f"PNG: {fig_path}")
