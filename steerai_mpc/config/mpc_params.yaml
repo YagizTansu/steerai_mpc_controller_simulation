@@ -121,7 +121,7 @@ solver:
   # Range: 1e-6 - 1.0
   # Default: 1.5 (maximum relaxation)
   # If this tolerance is reached for acceptable_iter iterations, solver stops
-  acceptable_tol: 1.5
+  acceptable_tol: 1.0
   
   # Acceptable iterations
   # Range: 1 - 50

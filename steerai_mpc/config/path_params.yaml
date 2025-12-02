@@ -85,7 +85,7 @@ velocity_profile:
   # The vehicle will gradually increase speed over this distance
   # Higher value = smoother, more gradual acceleration
   # Default: 15.0
-  accel_dist: 15.0
+  accel_dist: 20.0
 
   # Initial speed at the very beginning (m/s)
   # The speed the vehicle starts with before accelerating
