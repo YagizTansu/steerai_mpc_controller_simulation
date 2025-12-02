@@ -50,11 +50,24 @@ source devel/setup.bash
    *Note: The controller will start and wait for a path to be published on `/gem/raw_path`.*
 
 3. **Publish the Reference Path:**
-   In a new terminal, publish the desired path (e.g., the modified reference path):
+   In a new terminal, publish the desired path:
+   
+   **Easy Path (Default):**
    ```bash
-   rosrun steerai_mpc path_publisher.py _path_file:=paths/reference_path_sim.csv
+   rosrun steerai_mpc path_publisher.py _path_file:=paths/steerai.csv
    ```
-   *Note: You can specify any CSV file relative to the package or an absolute path.*
+   
+   **Medium Difficulty Path:**
+   ```bash
+   rosrun steerai_mpc path_publisher.py _path_file:=paths/mid_path.csv
+   ```
+   
+   **Hard Path (Aggressive Maneuvers):**
+   ```bash
+   rosrun steerai_mpc path_publisher.py _path_file:=paths/hard_path.csv
+   ```
+   
+   *Note: You may need to adjust MPC parameters (in `config/mpc_params.yaml`) and path parameters (in `config/path_params.yaml`) based on the difficulty level. Medium and hard paths may require tuning of weights, prediction horizon, or speed limits for optimal performance.*
 
 ---
 
@@ -205,6 +218,10 @@ roslaunch gem_gazebo gem_gazebo_rviz.launch
 # Terminal 2: MPC Controller
 roslaunch steerai_mpc mpc_controller.launch
 
-# Terminal 3: Path Publisher
-rosrun steerai_mpc path_publisher.py _path_file:=paths/reference_path_sim.csv
+# Terminal 3: Path Publisher (Easy Path)
+rosrun steerai_mpc path_publisher.py _path_file:=paths/steerai.csv
+
+# Alternative paths:
+# Medium: rosrun steerai_mpc path_publisher.py _path_file:=paths/mid_path.csv
+# Hard: rosrun steerai_mpc path_publisher.py _path_file:=paths/hard_path.csv
 ```
