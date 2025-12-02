@@ -79,6 +79,7 @@ class MPCController:
         self.total_distance_traveled = 0.0
         self.prev_position = None
         self.last_completed_path_seq = -1
+        self.last_cmd = np.array([0.0, 0.0])  # [cmd_v, cmd_steer]
         
         # Path tracking for goal detection
         self.current_path_seq = -1
@@ -304,17 +305,12 @@ class MPCController:
                 rate.sleep()
                 continue
             
-            # Delay Compensation
-            delay_dt = self.dt
-            x0, y0, yaw0, v0 = self.current_state
-            yaw_rate = self.current_yaw_rate
-            
-            x_pred = x0 + v0 * np.cos(yaw0) * delay_dt
-            y_pred = y0 + v0 * np.sin(yaw0) * delay_dt
-            yaw_pred = yaw0 + yaw_rate * delay_dt
-            v_pred = v0
-            
-            predicted_state = np.array([x_pred, y_pred, yaw_pred, v_pred])
+            # Delay Compensation using Neural Network model for consistency
+            # Use the last command sent to predict current state
+            predicted_state = self.vehicle_model.predict_next_state_numpy(
+                self.current_state, 
+                self.last_cmd
+            )
             
             # Get Reference Trajectory (T+1 points)
             ref_traj = self.path_manager.get_reference(
@@ -329,6 +325,9 @@ class MPCController:
             
             # Solve MPC
             cmd_v, cmd_steer, success = self.solver.solve(predicted_state, ref_traj)
+            
+            # Store command for next delay compensation
+            self.last_cmd = np.array([cmd_v, cmd_steer])
             
             # Publish Command
             msg = AckermannDrive()

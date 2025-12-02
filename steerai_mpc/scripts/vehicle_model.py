@@ -84,6 +84,43 @@ class VehicleModel:
         
         return out[0], out[1] # next_v, delta_yaw
 
+    def predict_next_state_numpy(self, curr_state, control_input):
+        """
+        Predicts the next state using numpy arrays (for delay compensation).
+        
+        :param curr_state: numpy array [x, y, yaw, v]
+        :param control_input: numpy array [cmd_v, cmd_steer]
+        :return: Next state as numpy array [x_next, y_next, yaw_next, v_next]
+        """
+        curr_x, curr_y, curr_yaw, curr_v = curr_state
+        cmd_v, cmd_steer = control_input
+        
+        # Normalize input
+        inp = np.array([curr_v, cmd_v, cmd_steer])
+        inp_norm = (inp - self.mean_X) / self.scale_X
+        
+        # Forward pass through neural network
+        h1 = np.dot(self.W1, inp_norm) + self.b1
+        h1 = np.log(1 + np.exp(np.clip(h1, -10, 10)))  # Softplus with clipping for stability
+        
+        h2 = np.dot(self.W2, h1) + self.b2
+        h2 = np.log(1 + np.exp(np.clip(h2, -10, 10)))
+        
+        out_norm = np.dot(self.W3, h2) + self.b3
+        
+        # Denormalize output
+        out = out_norm * self.scale_y + self.mean_y
+        next_v_pred = out[0]
+        delta_yaw_pred = out[1]
+        
+        # State update
+        next_x = curr_x + curr_v * np.cos(curr_yaw) * self.dt
+        next_y = curr_y + curr_v * np.sin(curr_yaw) * self.dt
+        next_yaw = curr_yaw + delta_yaw_pred
+        next_v = next_v_pred
+        
+        return np.array([next_x, next_y, next_yaw, next_v])
+    
     def get_next_state(self, curr_state, control_input):
         """
         Returns the symbolic expression for the next state using Neural Network dynamics.
