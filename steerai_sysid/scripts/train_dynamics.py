@@ -22,16 +22,16 @@ class DynamicsModel(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super(DynamicsModel, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.relu1 = nn.ReLU()
+        self.act1 = nn.Softplus()
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.relu2 = nn.ReLU()
+        self.act2 = nn.Softplus()
         self.fc3 = nn.Linear(hidden_dim, output_dim)
         
     def forward(self, x):
         out = self.fc1(x)
-        out = self.relu1(out)
+        out = self.act1(out)
         out = self.fc2(out)
-        out = self.relu2(out)
+        out = self.act2(out)
         out = self.fc3(out)
         return out
 

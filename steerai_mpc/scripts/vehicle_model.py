@@ -70,11 +70,12 @@ class VehicleModel:
         inp_norm = (inp - self.mean_X) / self.scale_X
         
         # Forward Pass (ReLU activation)
+        # Forward Pass (Softplus activation for smooth gradients)
         h1 = ca.mtimes(self.W1, inp_norm) + self.b1
-        h1 = ca.fmax(0, h1) # ReLU
+        h1 = ca.log(1 + ca.exp(h1)) # Softplus
         
         h2 = ca.mtimes(self.W2, h1) + self.b2
-        h2 = ca.fmax(0, h2) # ReLU
+        h2 = ca.log(1 + ca.exp(h2)) # Softplus
         
         out_norm = ca.mtimes(self.W3, h2) + self.b3
         

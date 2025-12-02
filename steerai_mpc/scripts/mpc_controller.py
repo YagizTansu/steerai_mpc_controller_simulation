@@ -60,7 +60,7 @@ class MPCController:
                 'acceptable_tol': self.solver_acceptable_tol,
                 'acceptable_iter': self.solver_acceptable_iter,
                 'max_cpu_time': self.solver_max_cpu_time,
-                'hessian_approximation': 'limited-memory',
+                'hessian_approximation': 'exact',
                 'limited_memory_max_history': 6,
             }
         }
