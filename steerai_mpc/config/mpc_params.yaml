@@ -14,7 +14,7 @@ vehicle:
   # Range: 0.1 - 10.0
   # Default: 5.556 m/s (exactly 20 km/h - project requirement)
   # Higher values allow faster driving but may reduce control accuracy
-  v_max: 5.56
+  v_max: 5.40
   
   # Maximum steering angle (radians)
   # Range: 0.1 - 1.5 rad
