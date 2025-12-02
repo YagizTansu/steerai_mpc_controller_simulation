@@ -1,15 +1,5 @@
 # Path Manager Configuration Parameters
-# Settings for path loading, interpolation, and processing
-
-# ============================================================================
-# PATH FILE LOCATION
-# ============================================================================
-path:
-  # CSV file containing the reference path
-  # Can be absolute path or relative to ROS package
-  # Expected columns: 'x', 'y' or 'curr_x', 'curr_y'
-  # The path manager will automatically detect column names
-  file: "$(find steerai_mpc)/paths/reference_path_sim.csv"
+# Settings for interpolation, and processing
 
 # ============================================================================
 # INTERPOLATION SETTINGS
@@ -21,7 +11,7 @@ interpolation:
   # Default: 0.0 (no smoothing, interpolates exactly through points)
   # Higher values create smoother paths but may deviate from original points
   # Use 0.0 for precise path following, 0.5-2.0 for smoothing noisy paths
-  smoothness: 5.0
+  smoothness: 1.0
   
   # Degree of B-spline curve
   # Range: 1 - 5 (typically 3)
@@ -76,7 +66,7 @@ velocity_profile:
   # Lower value = slower in turns (safer)
   # Higher value = faster in turns (more aggressive)
   # Default: 1.0
-  a_lat_max: 12.0
+  a_lat_max: 1.0
 
   # Velocity smoothing window size
   # Number of points to average for smooth velocity transitions
