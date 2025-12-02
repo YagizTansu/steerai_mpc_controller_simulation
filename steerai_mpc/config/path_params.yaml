@@ -88,14 +88,14 @@ velocity_profile:
   # The lowest speed the vehicle is allowed to plan for (except stopping)
   # Prevents vehicle from stopping completely in very sharp turns
   # Default: 1.0
-  v_min: 1.0
+  v_min: 0.5
 
   # ---- ACCELERATION PHASE (Start) ----
   # Acceleration distance from the start (meters)
   # The vehicle will gradually increase speed over this distance
   # Higher value = smoother, more gradual acceleration
   # Default: 15.0
-  accel_dist: 30.0
+  accel_dist: 15.0
 
   # Initial speed at the very beginning (m/s)
   # The speed the vehicle starts with before accelerating
