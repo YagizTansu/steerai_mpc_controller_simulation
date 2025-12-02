@@ -59,17 +59,16 @@ class VehicleModel:
             rospy.logerr(f"VehicleModel: Failed to load model: {e}")
             raise e
 
-    def _neural_net_dynamics(self, v, cmd_v, cmd_steer):
+    def _neural_net_dynamics(self, v, yaw_rate, cmd_v, cmd_steer):
         """
         Symbolic Neural Network forward pass using CasADi.
-        Input: [v, cmd_v, cmd_steer]
-        Output: [next_v, delta_yaw]
+        Input: [v, yaw_rate, cmd_v, cmd_steer]
+        Output: [delta_v, delta_yaw]
         """
         # Normalize Input
-        inp = ca.vertcat(v, cmd_v, cmd_steer)
+        inp = ca.vertcat(v, yaw_rate, cmd_v, cmd_steer)
         inp_norm = (inp - self.mean_X) / self.scale_X
         
-        # Forward Pass (ReLU activation)
         # Forward Pass (Softplus activation for smooth gradients)
         h1 = ca.mtimes(self.W1, inp_norm) + self.b1
         h1 = ca.log(1 + ca.exp(h1)) # Softplus
@@ -79,16 +78,17 @@ class VehicleModel:
         
         out_norm = ca.mtimes(self.W3, h2) + self.b3
         
-        # Denormalize Output: [next_v, delta_yaw]
+        # Denormalize Output: [delta_v, delta_yaw]
         out = out_norm * self.scale_y + self.mean_y
         
-        return out[0], out[1] # next_v, delta_yaw
+        return out[0], out[1] # delta_v, delta_yaw
 
-    def predict_next_state_numpy(self, curr_state, control_input):
+    def predict_next_state_numpy(self, curr_state, current_yaw_rate, control_input):
         """
         Predicts the next state using numpy arrays (for delay compensation).
         
         :param curr_state: numpy array [x, y, yaw, v]
+        :param current_yaw_rate: float
         :param control_input: numpy array [cmd_v, cmd_steer]
         :return: Next state as numpy array [x_next, y_next, yaw_next, v_next]
         """
@@ -96,7 +96,7 @@ class VehicleModel:
         cmd_v, cmd_steer = control_input
         
         # Normalize input
-        inp = np.array([curr_v, cmd_v, cmd_steer])
+        inp = np.array([curr_v, current_yaw_rate, cmd_v, cmd_steer])
         inp_norm = (inp - self.mean_X) / self.scale_X
         
         # Forward pass through neural network
@@ -110,22 +110,23 @@ class VehicleModel:
         
         # Denormalize output
         out = out_norm * self.scale_y + self.mean_y
-        next_v_pred = out[0]
+        delta_v_pred = out[0]
         delta_yaw_pred = out[1]
         
         # State update
         next_x = curr_x + curr_v * np.cos(curr_yaw) * self.dt
         next_y = curr_y + curr_v * np.sin(curr_yaw) * self.dt
         next_yaw = curr_yaw + delta_yaw_pred
-        next_v = next_v_pred
+        next_v = curr_v + delta_v_pred # Residual update
         
         return np.array([next_x, next_y, next_yaw, next_v])
     
-    def get_next_state(self, curr_state, control_input):
+    def get_next_state(self, curr_state, current_yaw_rate, control_input):
         """
         Returns the symbolic expression for the next state using Neural Network dynamics.
         
         :param curr_state: CasADi variable [x, y, yaw, v]
+        :param current_yaw_rate: CasADi variable or float (yaw rate)
         :param control_input: CasADi variable [cmd_v, cmd_steer]
         :return: Next state symbolic expression [x_next, y_next, yaw_next, v_next]
         """
@@ -138,12 +139,12 @@ class VehicleModel:
         cmd_steer = control_input[1]
         
         # Neural Network prediction
-        next_v_pred, delta_yaw_pred = self._neural_net_dynamics(curr_v, cmd_v, cmd_steer)
+        delta_v_pred, delta_yaw_pred = self._neural_net_dynamics(curr_v, current_yaw_rate, cmd_v, cmd_steer)
             
         # State Update
         next_x = curr_x + curr_v * ca.cos(curr_yaw) * self.dt
         next_y = curr_y + curr_v * ca.sin(curr_yaw) * self.dt
         next_yaw = curr_yaw + delta_yaw_pred
-        next_v = next_v_pred
+        next_v = curr_v + delta_v_pred # Residual update
         
         return ca.vertcat(next_x, next_y, next_yaw, next_v)

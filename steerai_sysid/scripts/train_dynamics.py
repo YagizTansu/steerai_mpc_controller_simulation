@@ -38,17 +38,25 @@ class DynamicsModel(nn.Module):
 def train_model():
     # 1. Load Data
     rospack = rospkg.RosPack()
-    data_path = os.path.join(rospack.get_path('steerai_data_collector'), 'data', 'training_data.csv')
+    data_dir = os.path.join(rospack.get_path('steerai_data_collector'), 'data')
     
-    if not os.path.exists(data_path):
-        print(f"Error: Data file not found at {data_path}")
+    # Find latest training_data_*.csv or training_data.csv
+    files = [f for f in os.listdir(data_dir) if f.startswith('training_data') and f.endswith('.csv')]
+    if not files:
+        print(f"Error: No training data found in {data_dir}")
         return
+        
+    # Sort by modification time
+    files.sort(key=lambda x: os.path.getmtime(os.path.join(data_dir, x)), reverse=True)
+    latest_file = files[0]
+    data_path = os.path.join(data_dir, latest_file)
+    print(f"Loading data from: {data_path}")
 
     df = pd.read_csv(data_path)
     
     # 2. Feature Engineering
-    # Inputs: [curr_speed, cmd_speed, cmd_steering_angle]
-    # Targets: [next_speed, delta_yaw]
+    # Inputs: [curr_speed, curr_yaw_rate, cmd_speed, cmd_steering_angle]
+    # Targets: [delta_speed, delta_yaw]
     
     # DOWNSAMPLING: 50Hz -> 10Hz
     # Take every 5th sample to match MPC dt=0.1s
@@ -61,6 +69,9 @@ def train_model():
     df['next_speed'] = df['curr_speed'].shift(-1)
     df['next_yaw'] = df['curr_yaw'].shift(-1)
     
+    # Calculate delta_speed
+    df['delta_speed'] = df['next_speed'] - df['curr_speed']
+
     # Calculate delta_yaw (handle wrapping if necessary, but for small steps simple diff is usually ok)
     # For robust wrapping: (angle + pi) % (2*pi) - pi
     # Calculate delta_yaw with robust wrapping
@@ -71,8 +82,8 @@ def train_model():
     # Drop last row (NaN due to shift)
     df = df.dropna()
     
-    X = df[['curr_speed', 'cmd_speed', 'cmd_steering_angle']].values
-    y = df[['next_speed', 'delta_yaw']].values
+    X = df[['curr_speed', 'curr_yaw_rate', 'cmd_speed', 'cmd_steering_angle']].values
+    y = df[['delta_speed', 'delta_yaw']].values
     
     # 3. Preprocessing
     scaler_X = StandardScaler()
@@ -96,7 +107,7 @@ def train_model():
     y_val_tensor = torch.FloatTensor(y_val).to(device)
     
     # 4. Model Setup
-    input_dim = 3
+    input_dim = 4
     hidden_dim = 64
     output_dim = 2
     
