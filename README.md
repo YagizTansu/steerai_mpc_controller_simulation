@@ -160,7 +160,7 @@ You can run the entire simulation and control stack using Docker.
 ### Build the Image
 Navigate to the project directory:
 ```bash
-cd ~/catkin_ws/src/POLARIS_GEM_e2
+cd ~/catkin_ws/src/steerai_mpc_controller_simulation
 ```
 
 Build the Docker image:
