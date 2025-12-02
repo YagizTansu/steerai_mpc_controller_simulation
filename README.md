@@ -104,8 +104,8 @@ The model is validated on a hold-out test set (20% of collected data).
 
 - **Metric**: Root Mean Squared Error (RMSE)
 - **Typical Performance**:
-  - Speed RMSE: 0.0130 m/s
-  - Delta Yaw RMSE: 0.0035 rad
+  - Speed RMSE: 0.0121 m/s
+  - Delta Yaw RMSE: 0.0032 rad
 
 **Training Results:**
 The training script generates plots showing the loss curve and prediction performance against ground truth.
