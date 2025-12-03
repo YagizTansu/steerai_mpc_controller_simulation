@@ -164,6 +164,8 @@ Minimize $J = \sum_{k=0}^{T} (w_{pos} \cdot e_{pos}^2 + w_{head} \cdot (1 - \cos
 ### Path Following
 The controller receives a global path (waypoints) and uses a **KDTree** for efficient nearest-neighbor search to find the local reference trajectory at each time step.
 
+*For more implementation details, see the [steerai_mpc package](https://github.com/YagizTansu/steerai_mpc_controller_simulation/tree/master/steerai_mpc).*
+
 ---
 
 ## 4. Docker Support
