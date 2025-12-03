@@ -168,14 +168,14 @@ The controller receives a global path (waypoints) and uses a **KDTree** for effi
 
 ---
 
-## 4. Docker Support
+## 5. Docker Support
 
 You can run the entire simulation and control stack using Docker.
 
 ### Build the Image
-Navigate to the project directory:
+Navigate to the project directory (where you cloned the repository):
 ```bash
-cd ~/catkin_ws/src/steerai_mpc_controller_simulation
+cd /path/to/steerai_mpc_controller_simulation
 ```
 
 Build the Docker image:
