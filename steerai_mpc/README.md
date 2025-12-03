@@ -1,6 +1,6 @@
-# 🚗 Model Predictive Controller (MPC) - Detailed Technical Documentation
+# Model Predictive Controller (MPC) - Detailed Technical Documentation
 
-## 📋 Table of Contents
+## Table of Contents
 1. [System Overview](#system-overview)
 2. [Architecture](#architecture)
 3. [Modules and Scripts](#modules-and-scripts)
@@ -12,7 +12,7 @@
 
 ---
 
-## 🎯 System Overview
+## System Overview
 
 This project is a **Model Predictive Control (MPC)** based path tracking system for the **POLARIS GEM e2** autonomous vehicle. The system predicts the vehicle's future behavior using learned neural network dynamics and generates optimal control commands.
 
@@ -26,7 +26,7 @@ This project is a **Model Predictive Control (MPC)** based path tracking system 
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -66,7 +66,7 @@ This project is a **Model Predictive Control (MPC)** based path tracking system 
 
 ---
 
-## 📦 Modules and Scripts
+## Modules and Scripts
 
 ### 1️⃣ **mpc_controller.py** (Main Control Loop)
 **File Path**: `steerai_mpc/scripts/mpc_controller.py`

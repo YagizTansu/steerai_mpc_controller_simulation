@@ -156,9 +156,11 @@ Minimize $J = \sum_{k=0}^{T} (w_{pos} \cdot e_{pos}^2 + w_{head} \cdot (1 - \cos
 - **Control Effort**: Penalties on rapid changes in steering ($\Delta \delta$) and acceleration ($\Delta v$) for smoothness.
 
 **Constraints:**
-- **Actuator Limits**:
+- **Hard Constraints** (Strictly enforced):
   - Speed: $[-5.5, 5.5]$ m/s
   - Steering Angle: $[-0.6, 0.6]$ rad
+- **Soft Constraint** (Penalty-based):
+  - Cross-Track Error (CTE): $\leq 1.0$ m (exponential penalty for violations)
 - **Dynamics**: The vehicle state must evolve according to the Neural Network Dynamics Model.
 
 ### Path Following
