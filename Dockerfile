@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     ros-noetic-ackermann-msgs \
     ros-noetic-geometry-msgs \
     ros-noetic-nav-msgs \
+    ros-noetic-visualization-msgs \
     ros-noetic-tf \
     ros-noetic-dynamic-reconfigure \
     ros-noetic-ros-control \
@@ -18,6 +19,8 @@ RUN apt-get update && apt-get install -y \
     ros-noetic-gazebo-ros-control \
     ros-noetic-velodyne-description \
     ros-noetic-jsk-rviz-plugins \
+    coinor-libipopt-dev \
+    pkg-config \
     git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -37,7 +40,7 @@ RUN pip3 install --no-cache-dir \
 WORKDIR /root/catkin_ws/src
 
 # Copy project files
-COPY . /root/catkin_ws/src/POLARIS_GEM_e2
+COPY . /root/catkin_ws/src/steerai_mpc_controller_simulation
 
 # Build workspace
 WORKDIR /root/catkin_ws
