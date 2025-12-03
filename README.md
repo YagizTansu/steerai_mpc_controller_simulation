@@ -54,7 +54,7 @@ source devel/setup.bash
    
    **Easy Path (Default):**
    ```bash
-   rosrun steerai_mpc path_publisher.py _path_file:=paths/steerai.csv
+   rosrun steerai_mpc path_publisher.py _path_file:=paths/steerai_path.csv
    ```
    
    **Medium Difficulty Path:**
@@ -219,7 +219,7 @@ roslaunch gem_gazebo gem_gazebo_rviz.launch
 roslaunch steerai_mpc mpc_controller.launch
 
 # Terminal 3: Path Publisher (Easy Path)
-rosrun steerai_mpc path_publisher.py _path_file:=paths/steerai.csv
+rosrun steerai_mpc path_publisher.py _path_file:=paths/steerai_path.csv
 
 # Alternative paths:
 # Medium: rosrun steerai_mpc path_publisher.py _path_file:=paths/mid_path.csv
