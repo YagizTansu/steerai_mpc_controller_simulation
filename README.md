@@ -157,8 +157,8 @@ Minimize $J = \sum_{k=0}^{T} (w_{pos} \cdot e_{pos}^2 + w_{head} \cdot (1 - \cos
 
 **Constraints:**
 - **Hard Constraints** (Strictly enforced):
-  - Speed: $[-5.5, 5.5]$ m/s
-  - Steering Angle: $[-0.6, 0.6]$ rad
+  - Speed: $[-5.56, 5.56]$ m/s ($[-20.0, 20.0]$ km/h)
+  - Steering Angle: $[-0.6, 0.6]$ rad ($[-34.4°, 34.4°]$)
 - **Soft Constraint** (Penalty-based):
   - Cross-Track Error (CTE): $\leq 1.0$ m (exponential penalty for violations)
 - **Dynamics**: The vehicle state must evolve according to the Neural Network Dynamics Model.
