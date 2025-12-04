@@ -34,17 +34,6 @@ class MPCSolver:
         self.prev_X[3, :] = target_speed
         self.prev_U[0, :] = target_speed
 
-    def update_weights(self, new_weights):
-        """Update cost function weights dynamically."""
-        self.weights.update(new_weights)
-        
-        # Update parameter values in the optimizer
-        self.opti.set_value(self.W_pos, self.weights['position'])
-        self.opti.set_value(self.W_head, self.weights['heading'])
-        self.opti.set_value(self.W_vel, self.weights['velocity'])
-        self.opti.set_value(self.W_steer, self.weights['steering_smooth'])
-        self.opti.set_value(self.W_acc, self.weights['acceleration_smooth'])
-
     def setup_solver(self):
         """Setup CasADi Opti stack."""
         self.opti = ca.Opti()
@@ -130,14 +119,6 @@ class MPCSolver:
         # Solver Options
         p_opts = {'expand': True}
         s_opts = self.params.get('solver_opts', {})
-        # Default solver options if not provided
-        if not s_opts:
-            s_opts = {
-                'max_iter': 100,
-                'print_level': 0,
-                'tol': 1e-2,
-                'acceptable_tol': 1e-1,
-            }
             
         self.opti.solver('ipopt', p_opts, s_opts)
 
@@ -173,7 +154,7 @@ class MPCSolver:
             self.prev_U[:, :-1] = sol.value(self.U)[:, 1:]
             self.prev_U[:, -1] = sol.value(self.U)[:, -1]
             
-            return cmd_v, cmd_steer, True
+            return cmd_v, cmd_steer
             
         except Exception as e:
             rospy.logwarn_throttle(1, f"MPC Solver Failed: {str(e)}")
@@ -191,4 +172,4 @@ class MPCSolver:
             self.prev_U[0, :] = target_speed
             self.prev_U[1, :] = 0.0
             
-            return 0.0, 0.0, False
+            return 0.0, 0.0

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPC Solver Architecture</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --card-bg: #252526;
+            --text-main: #d4d4d4;
+            --text-muted: #a0a0a0;
+            --accent-blue: #3794ff;
+            --accent-green: #4ec9b0;
+            --accent-orange: #ce9178;
+            --accent-purple: #c586c0;
+            --accent-red: #f44747;
+            --border-color: #3e3e42;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+            align-items: stretch;
+            max-width: 1400px;
+            width: 100%;
+            position: relative;
+        }
+
+        /* General Box Styles */
+        .box {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+            color: var(--text-muted);
+        }
+
+        .item {
+            background: rgba(255,255,255,0.05);
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            border-left: 3px solid transparent;
+        }
+
+        /* INPUTS COLUMN */
+        .inputs-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .inputs-col .item { border-left-color: var(--accent-blue); }
+
+        /* SOLVER CORE (CENTER) */
+        .solver-core {
+            flex: 3;
+            border: 2px solid var(--accent-purple);
+            background: rgba(30, 30, 30, 0.5);
+            position: relative;
+        }
+        
+        .solver-header {
+            background: var(--accent-purple);
+            color: white;
+            padding: 5px 10px;
+            font-weight: bold;
+            border-radius: 6px 6px 0 0;
+            text-align: center;
+            margin: -16px -16px 15px -16px;
+        }
+
+        .math-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .math-box {
+            background: rgba(0,0,0,0.2);
+            border: 1px dashed var(--border-color);
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .math-box h4 {
+            margin: 0 0 10px 0;
+            color: var(--accent-green);
+            font-size: 0.9rem;
+        }
+
+        .formula {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            color: var(--accent-orange);
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* OUTPUTS COLUMN */
+        .outputs-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .outputs-col .item { border-left-color: var(--accent-green); background: rgba(78, 201, 176, 0.1); }
+
+        /* ARROWS */
+        .arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        /* SPECIAL HIGHLIGHTS */
+        .nn-badge {
+            background: linear-gradient(45deg, #c586c0, #3794ff);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            margin-left: 5px;
+        }
+
+        .loop-indicator {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 3rem;
+            opacity: 0.1;
+            font-weight: bold;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <!-- INPUTS -->
+        <div class="inputs-col">
+            <div class="box">
+                <div class="title">Inputs (Girdiler)</div>
+                <div class="item">
+                    <strong>Current State (P)</strong><br>
+                    [x, y, yaw, v]
+                </div>
+                <div class="item">
+                    <strong>Reference Trajectory (Ref)</strong><br>
+                    Matrix (4 x 21)<br>
+                    <span class="desc">Hedef yol noktaları</span>
+                </div>
+                <div class="item">
+                    <strong>Warm Start</strong><br>
+                    prev_X, prev_U<br>
+                    <span class="desc">Önceki çözümden tahmin</span>
+                </div>
+            </div>
+            
+            <div class="box">
+                <div class="title">Parameters</div>
+                <div class="item">Weights (W_pos, W_head...)</div>
+                <div class="item">Constraints (v_max, cte_max)</div>
+                <div class="item">Horizon (T=20), dt=0.1s</div>
+            </div>
+        </div>
+
+        <div class="arrow">➜</div>
+
+        <!-- SOLVER CORE -->
+        <div class="box solver-core">
+            <div class="solver-header">MPC SOLVER (CasADi / IPOPT)</div>
+            <div class="loop-indicator">∑ k=0..T</div>
+            
+            <div style="margin-bottom: 15px; text-align: center; font-style: italic; color: var(--text-muted);">
+                "Minimize Cost subject to Constraints"
+            </div>
+
+            <div class="math-grid">
+                <!-- Cost Function -->
+                <div class="math-box" style="border-color: var(--accent-red);">
+                    <h4 style="color: var(--accent-red);">1. Cost Function (J)</h4>
+                    
+                    <div class="item">
+                        <span class="formula">J_state = (x-x_ref)² + (v-v_ref)²...</span>
+                        <span class="desc">Yoldan sapma ve hız hatası cezası</span>
+                    </div>
+                    <div class="item">
+                        <span class="formula">J_control = (δ_k - δ_k-1)²</span>
+                        <span class="desc">Direksiyonu ani kırma cezası (Smoothness)</span>
+                    </div>
+                    <div class="item">
+                        <span class="formula">J_soft = 1000 * max(0, err - CTE_max)²</span>
+                        <span class="desc">Yol sınırını aşarsan devasa ceza!</span>
+                    </div>
+                </div>
+
+                <!-- Constraints -->
+                <div class="math-box" style="border-color: var(--accent-orange);">
+                    <h4 style="color: var(--accent-orange);">2. Constraints (s.t.)</h4>
+                    
+                    <div class="item">
+                        <span class="formula">-v_max ≤ v ≤ v_max</span>
+                        <span class="desc">Hız limitleri</span>
+                    </div>
+                    <div class="item">
+                        <span class="formula">-δ_max ≤ δ ≤ δ_max</span>
+                        <span class="desc">Direksiyon limitleri</span>
+                    </div>
+                    <div class="item">
+                        <span class="formula">x_0 == Current State</span>
+                        <span class="desc">Başlangıç koşulu</span>
+                    </div>
+                </div>
+
+                <!-- Hybrid Model -->
+                <div class="math-box" style="grid-column: span 2; border-color: var(--accent-purple);">
+                    <h4 style="color: var(--accent-purple);">3. Hybrid Vehicle Model <span class="nn-badge">AI Powered</span></h4>
+                    <div style="display: flex; gap: 10px;">
+                        <div class="item" style="flex: 1;">
+                            <strong>Kinematics (Physics)</strong><br>
+                            <span class="formula">x_next = x + v*cos(ψ)*dt</span><br>
+                            <span class="desc">Konum değişimi geometriktir.</span>
+                        </div>
+                        <div class="item" style="flex: 1; border-left-color: var(--accent-purple);">
+                            <strong>Dynamics (Neural Net)</strong><br>
+                            <span class="formula">[Δv, Δψ] = NN(v, cmd_v, cmd_steer)</span><br>
+                            <span class="desc">Hızlanma ve dönme tepkisi yapay zekadan gelir.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="arrow">➜</div>
+
+        <!-- OUTPUTS -->
+        <div class="outputs-col">
+            <div class="box" style="border-color: var(--accent-green);">
+                <div class="title" style="color: var(--accent-green);">Outputs (Çıktılar)</div>
+                
+                <div class="item">
+                    <strong>Optimal Control (u0)</strong><br>
+                    <span style="color: var(--accent-green); font-size: 1.1rem;">cmd_v, cmd_steer</span><br>
+                    <span class="desc">Araca gönderilen ilk komut</span>
+                </div>
+
+                <div class="item">
+                    <strong>Predicted Trajectory</strong><br>
+                    X_opt (4 x 21)<br>
+                    <span class="desc">Gelecek 2 saniyelik plan (Warm Start için saklanır)</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

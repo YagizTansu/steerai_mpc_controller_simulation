@@ -13,8 +13,6 @@ from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
 from std_msgs.msg import ColorRGBA
 from tf.transformations import euler_from_quaternion
-from dynamic_reconfigure.server import Server
-from steerai_mpc.cfg import MPCDynamicParamsConfig
 
 # Add current directory to path so we can import our modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -77,7 +75,6 @@ class MPCController:
         self.current_state = None # [x, y, yaw, v]
         self.current_yaw_rate = 0.0
         self.total_distance_traveled = 0.0
-        self.total_distance_traveled = 0.0
         self.prev_position = None
         self.last_completed_path_seq = -1
         self.last_cmd = np.array([0.0, 0.0])  # [cmd_v, cmd_steer]
@@ -95,9 +92,6 @@ class MPCController:
         # CTE monitoring
         self.cte_violations = 0
         self.max_cte = 0.0
-        
-        # Dynamic Reconfigure
-        self.dyn_reconfig_srv = Server(MPCDynamicParamsConfig, self.dynamic_reconfigure_callback)
         
         rospy.loginfo("MPC Controller Initialized (Modular Version)")
 
@@ -133,35 +127,6 @@ class MPCController:
         self.target_speed = rospy.get_param(param_ns + 'control/target_speed', 5.556)
         self.goal_tolerance = rospy.get_param(param_ns + 'control/goal_tolerance', 0.5)
         self.loop_rate = rospy.get_param(param_ns + 'control/loop_rate', 10)
-
-    def dynamic_reconfigure_callback(self, config, level):
-        """Callback for dynamic reconfigure."""
-        rospy.loginfo("Dynamic reconfigure request received")
-        
-        # Update weights in solver
-        new_weights = {
-            'position': config.weight_position,
-            'heading': config.weight_heading,
-            'velocity': config.weight_velocity,
-            'steering_smooth': config.weight_steering_smooth,
-            'acceleration_smooth': config.weight_acceleration_smooth
-        }
-        
-        if hasattr(self, 'solver'):
-            self.solver.update_weights(new_weights)
-        
-        # Update target speed
-        old_speed = self.target_speed
-        self.target_speed = config.target_speed
-        if abs(old_speed - config.target_speed) > 0.01:
-            rospy.loginfo(f"Target speed updated: {old_speed:.2f} -> {config.target_speed:.2f} m/s")
-            # Update PathManager
-            if hasattr(self, 'path_manager'):
-                self.path_manager.set_target_speed(self.target_speed)
-        
-        self.goal_tolerance = config.goal_tolerance
-        
-        return config
 
     def odom_callback(self, msg):
         x = msg.pose.pose.position.x
@@ -287,25 +252,9 @@ class MPCController:
                 self.dist_traveled_on_path = 0.0
                 self.current_path_length = self.path_manager.get_path_length()
                 rospy.loginfo(f"New path received (Seq: {current_path_seq}), Length: {self.current_path_length:.2f}m")
-
-            # Check if we have already completed this path
-            if current_path_seq == self.last_completed_path_seq:
-                rospy.loginfo_throttle(2, f"Waiting for new path... (Completed Seq: {self.last_completed_path_seq})")
-                # Stop vehicle
-                msg = AckermannDrive()
-                msg.speed = 0.0
-                msg.steering_angle = 0.0
-                self.pub_cmd.publish(msg)
-                rate.sleep()
-                continue
-
-            # Check goal
-            # Only check for goal if we have traveled a significant portion of the path (e.g. 50% or > 5m)
-            # This prevents premature goal detection on looped paths where start ~= end
-            min_dist_check = min(5.0, self.current_path_length * 0.5)
             
-            if self.dist_traveled_on_path > min_dist_check and \
-               self.path_manager.is_goal_reached(self.current_state[0], self.current_state[1], self.goal_tolerance):
+            # Check if goal is reached            
+            if self.path_manager.is_goal_reached(self.current_state[0], self.current_state[1], self.goal_tolerance):
                 rospy.loginfo_throttle(1, f"🎯 Goal Reached! Stopping vehicle. (Seq: {current_path_seq})")
                 
                 # Plot CTE before resetting
@@ -340,11 +289,8 @@ class MPCController:
                 self.dt
             )
             
-            # Transpose to match shape (4, T+1) for solver
-            ref_traj = ref_traj.T
-            
             # Solve MPC
-            cmd_v, cmd_steer, success = self.solver.solve(predicted_state, ref_traj)
+            cmd_v, cmd_steer = self.solver.solve(predicted_state, ref_traj.T)
             
             # Store command for next delay compensation
             self.last_cmd = np.array([cmd_v, cmd_steer])
