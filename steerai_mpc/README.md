@@ -1148,7 +1148,6 @@ ls ~/catkin_ws/src/.../steerai_mpc/paths/
 
 ### ROS Packages:
 - `ackermann_msgs`: Vehicle control messages
-- `dynamic_reconfigure`: Runtime parameter adjustment
 - `tf2_ros`: Coordinate transformations
 
 ---

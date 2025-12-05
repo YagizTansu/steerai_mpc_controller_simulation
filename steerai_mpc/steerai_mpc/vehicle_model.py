@@ -3,10 +3,10 @@
 import torch
 import numpy as np
 import os
-import rospkg
+from ament_index_python.packages import get_package_share_directory
 import joblib
 import casadi as ca
-import rospy
+import rclpy
 
 class VehicleModel:
     def __init__(self, dt=0.1):
@@ -17,6 +17,7 @@ class VehicleModel:
         :param dt: Time step
         """
         self.dt = dt
+        self.logger = rclpy.logging.get_logger('vehicle_model')
         
         # Load Model and Scalers
         self.load_model()
@@ -28,8 +29,7 @@ class VehicleModel:
     def load_model(self):
         """Load PyTorch model and scalers from steerai_sysid package."""
         try:
-            rospack = rospkg.RosPack()
-            sysid_path = rospack.get_path('steerai_sysid')
+            sysid_path = get_package_share_directory('steerai_sysid')
             
             # Load Scalers
             self.scaler_X = joblib.load(os.path.join(sysid_path, 'scaler_X.pkl'))
@@ -53,10 +53,10 @@ class VehicleModel:
             self.mean_y = self.scaler_y.mean_
             self.scale_y = self.scaler_y.scale_
             
-            rospy.loginfo("VehicleModel: Neural network dynamics loaded successfully.")
+            self.logger.info("VehicleModel: Neural network dynamics loaded successfully.")
             
         except Exception as e:
-            rospy.logerr(f"VehicleModel: Failed to load model: {e}")
+            self.logger.error(f"VehicleModel: Failed to load model: {e}")
             raise e
 
     def _neural_net_dynamics(self, v, yaw_rate, cmd_v, cmd_steer):

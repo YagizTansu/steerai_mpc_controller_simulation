@@ -1,32 +1,64 @@
 #!/usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile
 import pandas as pd
 import numpy as np
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
-from tf.transformations import quaternion_from_euler
-import rospkg
+try:
+    from tf_transformations import quaternion_from_euler
+except ImportError:
+    def quaternion_from_euler(ai, aj, ak):
+        ai /= 2.0
+        aj /= 2.0
+        ak /= 2.0
+        ci = np.cos(ai)
+        si = np.sin(ai)
+        cj = np.cos(aj)
+        sj = np.sin(aj)
+        ck = np.cos(ak)
+        sk = np.sin(ak)
+        cc = ci*ck
+        cs = ci*sk
+        sc = si*ck
+        ss = si*sk
+
+        q = np.empty((4, ))
+        q[0] = cj*sc - sj*cs
+        q[1] = cj*ss + sj*cc
+        q[2] = cj*cs - sj*sc
+        q[3] = cj*cc + sj*ss
+
+        return q
+
+from ament_index_python.packages import get_package_share_directory
 import os
 
-class PathPublisher:
+class PathPublisher(Node):
     def __init__(self):
-        rospy.init_node('path_publisher')
+        super().__init__('path_publisher')
+        
+        self.logger = self.get_logger()
         
         # Parameters
-        self.path_file = rospy.get_param('~path_file', 'paths/steerai_path.csv')
-        self.frame_id = rospy.get_param('~frame_id', 'world')
-        self.topic_name = rospy.get_param('~topic_name', '/gem/raw_path')
+        self.declare_parameter('path_file', 'paths/steerai_path.csv')
+        self.declare_parameter('frame_id', 'world')
+        self.declare_parameter('topic_name', '/gem/raw_path')
+        
+        self.path_file = self.get_parameter('path_file').value
+        self.frame_id = self.get_parameter('frame_id').value
+        self.topic_name = self.get_parameter('topic_name').value
         
         if not self.path_file:
-            rospy.logwarn("No path_file parameter provided.")
+            self.logger.warn("No path_file parameter provided.")
             return
 
         # Resolve path if relative
         if not os.path.isabs(self.path_file):
             try:
-                rospack = rospkg.RosPack()
-                pkg_path = rospack.get_path('steerai_mpc')
+                pkg_path = get_package_share_directory('steerai_mpc')
                 
                 # Handle case where default included package name
                 if self.path_file.startswith('steerai_mpc/'):
@@ -34,19 +66,20 @@ class PathPublisher:
                     
                 self.path_file = os.path.join(pkg_path, self.path_file)
             except Exception as e:
-                rospy.logerr(f"Could not resolve package path: {e}")
+                self.logger.error(f"Could not resolve package path: {e}")
         
-        self.pub = rospy.Publisher(self.topic_name, Path, queue_size=1, latch=True)
+        qos = QoSProfile(depth=1)
+        self.pub = self.create_publisher(Path, self.topic_name, qos)
         
         self.load_and_publish()
         
     def load_and_publish(self):
         if not self.path_file or not os.path.exists(self.path_file):
-            rospy.logerr(f"Path file not found: {self.path_file}")
+            self.logger.error(f"Path file not found: {self.path_file}")
             return
 
         try:
-            rospy.loginfo(f"Loading path from: {self.path_file}")
+            self.logger.info(f"Loading path from: {self.path_file}")
             
             # Read CSV
             # Support multiple formats as in the original manager
@@ -66,13 +99,13 @@ class PathPublisher:
                     yaws = np.zeros(len(df_no_header))
                     
             except Exception as e:
-                rospy.logerr(f"Error parsing CSV: {e}")
+                self.logger.error(f"Error parsing CSV: {e}")
                 return
 
             # Create Path message
             msg = Path()
             msg.header.frame_id = self.frame_id
-            msg.header.stamp = rospy.Time.now()
+            msg.header.stamp = self.get_clock().now().to_msg()
             
             for i in range(len(points)):
                 pose = PoseStamped()
@@ -91,17 +124,17 @@ class PathPublisher:
                 msg.poses.append(pose)
             
             self.pub.publish(msg)
-            rospy.loginfo(f"Published raw path with {len(points)} points to {self.topic_name}")
+            self.logger.info(f"Published raw path with {len(points)} points to {self.topic_name}")
             
         except Exception as e:
-            rospy.logerr(f"Failed to load/publish path: {e}")
+            self.logger.error(f"Failed to load/publish path: {e}")
 
-    def run(self):
-        rospy.spin()
+def main(args=None):
+    rclpy.init(args=args)
+    node = PathPublisher()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
-    try:
-        node = PathPublisher()
-        node.run()
-    except rospy.ROSInterruptException:
-        pass
+    main()

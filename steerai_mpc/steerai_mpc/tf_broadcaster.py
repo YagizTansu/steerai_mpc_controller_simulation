@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
 
-class TFBroadcaster:
+class TFBroadcaster(Node):
     def __init__(self):
-        rospy.init_node('tf_broadcaster')
+        super().__init__('tf_broadcaster')
         
-        self.br = tf2_ros.TransformBroadcaster()
-        self.sub = rospy.Subscriber('/gem/base_footprint/odom', Odometry, self.odom_callback)
+        self.br = tf2_ros.TransformBroadcaster(self)
+        self.sub = self.create_subscription(Odometry, '/gem/base_footprint/odom', self.odom_callback, 10)
         
-        rospy.loginfo("TF Broadcaster Started: world -> base_footprint")
+        self.get_logger().info("TF Broadcaster Started: world -> base_footprint")
 
     def odom_callback(self, msg):
         t = TransformStamped()
@@ -30,9 +32,12 @@ class TFBroadcaster:
         
         self.br.sendTransform(t)
 
+def main(args=None):
+    rclpy.init(args=args)
+    node = TFBroadcaster()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
 if __name__ == '__main__':
-    try:
-        TFBroadcaster()
-        rospy.spin()
-    except rospy.ROSInterruptException:
-        pass
+    main()

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile
 import numpy as np
 import pandas as pd
 import os
@@ -10,15 +12,46 @@ from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 from visualization_msgs.msg import Marker
 from std_msgs.msg import ColorRGBA
-from tf.transformations import euler_from_quaternion
+try:
+    from tf_transformations import euler_from_quaternion
+except ImportError:
+    # Fallback or custom implementation if tf_transformations is not installed
+    def euler_from_quaternion(quat):
+        """
+        Converts quaternion (w in last place) to euler roll, pitch, yaw
+        quat = [x, y, z, w]
+        """
+        x = quat[0]
+        y = quat[1]
+        z = quat[2]
+        w = quat[3]
+
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+        sinp = 2 * (w * y - z * x)
+        if np.abs(sinp) >= 1:
+            pitch = np.copysign(np.pi / 2, sinp) # use 90 degrees if out of range
+        else:
+            pitch = np.arcsin(sinp)
+
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+        return roll, pitch, yaw
 
 class PathManager:
-    def __init__(self, param_namespace='~path_manager'):
+    def __init__(self, node, param_namespace='path_manager'):
         """
         Initialize PathManager.
         Subscribes to raw path topic and processes it.
+        :param node: ROS2 Node instance
         """
+        self.node = node
         self.param_namespace = param_namespace
+        self.logger = node.get_logger()
         
         # Load parameters
         self.load_parameters()
@@ -30,52 +63,60 @@ class PathManager:
         self.target_speed = 5.0 # Default, will be updated by controller
         self.path_length = 0.0 # Total length of the path
         
+        qos = QoSProfile(depth=1)
+        
         # Publisher for processed global path visualization
         if self.publish_path:
-            self.global_path_pub = rospy.Publisher('/gem/global_path', Path, queue_size=1, latch=True)
-            self.target_marker_pub = rospy.Publisher('/gem/target_point', Marker, queue_size=1)
+            self.global_path_pub = self.node.create_publisher(Path, '/gem/global_path', qos)
+            self.target_marker_pub = self.node.create_publisher(Marker, '/gem/target_point', qos)
         else:
             self.global_path_pub = None
             self.target_marker_pub = None
             
         # Subscriber for raw path
-        self.raw_path_sub = rospy.Subscriber('/gem/raw_path', Path, self.raw_path_callback)
-        rospy.loginfo("PathManager: Waiting for path on /gem/raw_path ...")
+        self.raw_path_sub = self.node.create_subscription(Path, '/gem/raw_path', self.raw_path_callback, 10)
+        self.logger.info("PathManager: Waiting for path on /gem/raw_path ...")
     
     def load_parameters(self):
         """Load parameters from ROS parameter server."""
+        # Helper to declare and get
+        def get_param(name, default):
+            # Check if parameter is already declared
+            if not self.node.has_parameter(name):
+                self.node.declare_parameter(name, default)
+            return self.node.get_parameter(name).value
+
         # Interpolation parameters
-        self.interpolation_smoothness = rospy.get_param(
-            self.param_namespace + '/interpolation/smoothness', 0.0)
-        self.interpolation_degree = rospy.get_param(
-            self.param_namespace + '/interpolation/degree', 3)
-        self.interpolation_resolution = rospy.get_param(
-            self.param_namespace + '/interpolation/resolution', 0.1)
+        self.interpolation_smoothness = get_param(
+            self.param_namespace + '.interpolation.smoothness', 0.0)
+        self.interpolation_degree = get_param(
+            self.param_namespace + '.interpolation.degree', 3)
+        self.interpolation_resolution = get_param(
+            self.param_namespace + '.interpolation.resolution', 0.1)
         
         # Processing parameters
-        self.duplicate_threshold = rospy.get_param(
-            self.param_namespace + '/processing/duplicate_threshold', 0.01)
+        self.duplicate_threshold = get_param(
+            self.param_namespace + '.processing.duplicate_threshold', 0.01)
         
         # Velocity Profile Parameters
-        # Loaded from path_params.yaml
-        self.a_lat_max = rospy.get_param(
-            self.param_namespace + '/velocity_profile/a_lat_max', 1.0)
-        self.smoothing_window = rospy.get_param(
-            self.param_namespace + '/velocity_profile/smoothing_window', 20)
-        self.v_min = rospy.get_param(
-            self.param_namespace + '/velocity_profile/v_min', 1.0)
-        self.accel_dist = rospy.get_param(
-            self.param_namespace + '/velocity_profile/accel_dist', 15.0)
-        self.initial_speed = rospy.get_param(
-            self.param_namespace + '/velocity_profile/initial_speed', 1.0)
+        self.a_lat_max = get_param(
+            self.param_namespace + '.velocity_profile.a_lat_max', 1.0)
+        self.smoothing_window = get_param(
+            self.param_namespace + '.velocity_profile.smoothing_window', 20)
+        self.v_min = get_param(
+            self.param_namespace + '.velocity_profile.v_min', 1.0)
+        self.accel_dist = get_param(
+            self.param_namespace + '.velocity_profile.accel_dist', 15.0)
+        self.initial_speed = get_param(
+            self.param_namespace + '.velocity_profile.initial_speed', 1.0)
         
-        rospy.loginfo(f"PathManager Params: a_lat_max={self.a_lat_max}, window={self.smoothing_window}, v_min={self.v_min}, accel_dist={self.accel_dist}, initial_speed={self.initial_speed}")
+        self.logger.info(f"PathManager Params: a_lat_max={self.a_lat_max}, window={self.smoothing_window}, v_min={self.v_min}, accel_dist={self.accel_dist}, initial_speed={self.initial_speed}")
         
         # Visualization parameters
-        self.frame_id = rospy.get_param(
-            self.param_namespace + '/visualization/frame_id', 'world')
-        self.publish_path = rospy.get_param(
-            self.param_namespace + '/visualization/publish_path', True)
+        self.frame_id = get_param(
+            self.param_namespace + '.visualization.frame_id', 'world')
+        self.publish_path = get_param(
+            self.param_namespace + '.visualization.publish_path', True)
             
     def set_target_speed(self, speed):
         """Update target speed and recalculate profile if path exists."""
@@ -85,7 +126,7 @@ class PathManager:
 
     def raw_path_callback(self, msg):
         """Callback for raw path message."""
-        rospy.loginfo(f"PathManager: Received new path with {len(msg.poses)} points.")
+        self.logger.info(f"PathManager: Received new path with {len(msg.poses)} points.")
         
         try:
             # Extract points
@@ -99,14 +140,14 @@ class PathManager:
             self.process_path(points)
             
         except Exception as e:
-            rospy.logerr(f"PathManager: Failed to process incoming path: {e}")
+            self.logger.error(f"PathManager: Failed to process incoming path: {e}")
 
     def process_path(self, points):
         """
         Removes duplicates, interpolates, and builds KDTree from points array.
         """
         if len(points) < 2:
-            rospy.logerr("Path must have at least 2 points.")
+            self.logger.error("Path must have at least 2 points.")
             return
 
         try:
@@ -121,7 +162,7 @@ class PathManager:
             points = np.array(clean_points)
 
             if len(points) < 2:
-                rospy.logerr("Path has too few points after cleaning.")
+                self.logger.error("Path has too few points after cleaning.")
                 return
 
             # 2. Interpolation (B-spline)
@@ -158,10 +199,10 @@ class PathManager:
                 self.publish_global_path()
             
             self.path_seq += 1
-            rospy.loginfo(f"Path processed successfully. Interpolated points: {len(self.path_data)} (Seq: {self.path_seq})")
+            self.logger.info(f"Path processed successfully. Interpolated points: {len(self.path_data)} (Seq: {self.path_seq})")
 
         except Exception as e:
-            rospy.logerr(f"Failed to process path: {e}")
+            self.logger.error(f"Failed to process path: {e}")
 
     def get_path_data(self):
         return self.path_data
@@ -175,7 +216,7 @@ class PathManager:
     def publish_global_path(self):
         msg = Path()
         msg.header.frame_id = self.frame_id
-        msg.header.stamp = rospy.Time.now()
+        msg.header.stamp = self.node.get_clock().now().to_msg()
         
         for pt in self.path_data:
             pose = PoseStamped()
@@ -273,7 +314,7 @@ class PathManager:
             v_profile[i] = min(v_profile[i], target_v)
 
         self.path_velocities = v_profile
-        rospy.loginfo(f"Velocity profile generated: initial_speed={self.initial_speed:.2f} m/s, max_speed={self.target_speed:.2f} m/s, accel_dist={self.accel_dist:.1f}m, decel_dist={decel_dist:.1f}m")
+        self.logger.info(f"Velocity profile generated: initial_speed={self.initial_speed:.2f} m/s, max_speed={self.target_speed:.2f} m/s, accel_dist={self.accel_dist:.1f}m, decel_dist={decel_dist:.1f}m")
         
         # Print details
         self.print_path_details()
@@ -327,7 +368,7 @@ class PathManager:
             
         marker = Marker()
         marker.header.frame_id = "world"
-        marker.header.stamp = rospy.Time.now()
+        marker.header.stamp = self.node.get_clock().now().to_msg()
         marker.ns = "target_point"
         marker.id = 0
         marker.type = Marker.SPHERE
@@ -339,7 +380,7 @@ class PathManager:
         marker.scale.x = 0.3
         marker.scale.y = 0.3
         marker.scale.z = 0.3
-        marker.color = ColorRGBA(1.0, 0.0, 0.0, 1.0)
+        marker.color = ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0)
         
         self.target_marker_pub.publish(marker)
 
@@ -425,10 +466,17 @@ class PathManager:
 
         print("="*95 + "\n")
 
+class PathManagerNode(Node):
+    def __init__(self):
+        super().__init__('path_manager_node')
+        self.pm = PathManager(self)
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = PathManagerNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
 if __name__ == '__main__':
-    try:
-        rospy.init_node('path_manager_node')
-        pm = PathManager()
-        rospy.spin()
-    except rospy.ROSInterruptException:
-        pass
+    main()

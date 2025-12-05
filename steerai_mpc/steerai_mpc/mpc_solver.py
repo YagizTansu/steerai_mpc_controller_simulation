@@ -2,7 +2,7 @@
 
 import casadi as ca
 import numpy as np
-import rospy
+import rclpy
 
 class MPCSolver:
     def __init__(self, vehicle_model, params):
@@ -14,6 +14,7 @@ class MPCSolver:
         """
         self.vehicle_model = vehicle_model
         self.params = params
+        self.logger = rclpy.logging.get_logger('mpc_solver')
         
         # Unpack commonly used parameters
         self.T = params['T']
@@ -157,7 +158,7 @@ class MPCSolver:
             return cmd_v, cmd_steer
             
         except Exception as e:
-            rospy.logwarn_throttle(1, f"MPC Solver Failed: {str(e)}")
+            self.logger.warn(f"MPC Solver Failed: {str(e)}")
             
             # Reset Warm Start on failure (simple prediction)
             x0, y0, th0, v0 = current_state
