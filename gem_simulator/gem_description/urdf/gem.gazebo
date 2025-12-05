@@ -191,13 +191,26 @@
     <material>Gazebo/Red</material>
   </gazebo>
 
+  <!-- Ackermann Steering Plugin -->
   <gazebo>
-    <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
-      <legacyModeNS>true</legacyModeNS>
-      <robotSimType>gazebo_ros_control/DefaultRobotHWSim</robotSimType>
+    <plugin filename="gz-sim-ackermann-steering-system" name="gz::sim::systems::AckermannSteering">
+      <left_joint>front_left_wheel_joint</left_joint>
+      <left_joint>rear_left_wheel_joint</left_joint>
+      <right_joint>front_right_wheel_joint</right_joint>
+      <right_joint>rear_right_wheel_joint</right_joint>
+      <left_steering_joint>left_steering_hinge_joint</left_steering_joint>
+      <right_steering_joint>right_steering_hinge_joint</right_steering_joint>
+      <kingpin_width>1.0</kingpin_width> <!-- Approx width -->
+      <steering_limit>0.61</steering_limit>
+      <wheel_base>1.75</wheel_base>
+      <wheel_separation>1.3</wheel_separation>
+      <wheel_radius>0.295</wheel_radius>
+      <min_velocity>-10</min_velocity>
+      <max_velocity>10</max_velocity>
+      <min_acceleration>-5</min_acceleration>
+      <max_acceleration>5</max_acceleration>
     </plugin>
   </gazebo>
-
 
   <!-- ***************************** camera ***************************** -->
 
@@ -221,84 +234,34 @@
           <stddev>0.007</stddev>
         </noise>
       </camera>
-      <plugin name="front_single_camera_controller" filename="libgazebo_ros_camera.so">
-        <alwaysOn>true</alwaysOn>
-        <updateRate>0.0</updateRate>
-        <cameraName>front_single_camera</cameraName>
-        <imageTopicName>image_raw</imageTopicName>
-        <cameraInfoTopicName>camera_info</cameraInfoTopicName>
-        <frameName>front_single_camera_link</frameName>
-        <hackBaseline>0.07</hackBaseline>
-        <distortionK1>0.0</distortionK1>
-        <distortionK2>0.0</distortionK2>
-        <distortionK3>0.0</distortionK3>
-        <distortionT1>0.0</distortionT1>
-        <distortionT2>0.0</distortionT2>
-      </plugin>
     </sensor>
   </gazebo>
 
   <!-- ***************************** IMU ***************************** -->
 
   <gazebo reference="IMU_link">
-    <gravity>true</gravity>
     <sensor name="imu_sensor" type="imu">
       <always_on>true</always_on>
       <update_rate>100</update_rate>
       <visualize>true</visualize>
-      <topic>__default_topic__</topic>
-      <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
-        <topicName>imu</topicName>
-        <bodyName>IMU_link</bodyName>
-        <updateRateHZ>20.0</updateRateHZ>
-        <gaussianNoise>0.0</gaussianNoise>
-        <xyzOffset>0 0 0</xyzOffset>
-        <rpyOffset>0 0 0</rpyOffset>
-        <frameName>IMU_link</frameName>
-        <initialOrientationAsReference>false</initialOrientationAsReference>
-      </plugin>
-      <pose>0 0 0 0 0 0</pose>
+      <topic>imu</topic>
     </sensor>
   </gazebo>
 
-
   <!-- ***************************** GPS ***************************** -->
 
-  <gazebo>
-
-    <plugin name="gazebo_ros_gps" filename="libhector_gazebo_ros_gps.so">
-    <updateRate>20.0</updateRate>
-    <bodyName>GPS_link</bodyName>
-    <frameId>GPS_link</frameId>
-    <topicName>gps/fix</topicName>
-    <velocityTopicName>gps/fix_velocity</velocityTopicName>
-
-    <referenceLatitude>40.09302494</referenceLatitude>
-    <referenceLongitude>-88.23575484</referenceLongitude>
-    <referenceAltitude>220</referenceAltitude>
-    <referenceHeading>90</referenceHeading>
-
-    <!--
-    <offset>0 0 0</offset>
-    <drift>0.001 0.001 0.001</drift>
-    <gaussianNoise>0.05 0.05 0.05</gaussianNoise>
-    <velocityDrift>0.001 0.001 0.001</velocityDrift>
-    <velocityGaussianNoise>0.5 0.5 0.5</velocityGaussianNoise>
-    -->
-
-    <offset>0 0 0</offset>
-    <drift>0.001 0.001 0.001</drift>
-    <gaussianNoise>0.01 0.01 0.01</gaussianNoise>
-    <velocityDrift>0 0 0</velocityDrift>
-    <velocityGaussianNoise>0.05 0.05 0.05</velocityGaussianNoise>
-
-    </plugin>
+  <gazebo reference="GPS_link">
+    <sensor name="gps_sensor" type="navsat">
+      <always_on>1</always_on>
+      <update_rate>20</update_rate>
+      <topic>gps/fix</topic>
+    </sensor>
   </gazebo>
 
   <!-- ***************************** Front Sonar ***************************** -->
 
   <gazebo reference="front_sonar_link">
-    <sensor type="ray" name="front_sonar_sensor">
+    <sensor type="gpu_ray" name="front_sonar_sensor">
       <always_on>true</always_on>
       <update_rate>10</update_rate>
       <pose>0 0 0 0 0 0</pose>
@@ -308,14 +271,14 @@
           <horizontal>
             <samples>2</samples>
             <resolution>1</resolution>
-            <min_angle>-28</min_angle>
-            <max_angle>28</max_angle>
+            <min_angle>-0.48</min_angle> <!-- approx 28 deg -->
+            <max_angle>0.48</max_angle>
           </horizontal>
           <vertical>
             <samples>2</samples>
             <resolution>1</resolution>
-            <min_angle>-28</min_angle>
-            <max_angle>28</max_angle>
+            <min_angle>-0.48</min_angle>
+            <max_angle>0.48</max_angle>
           </vertical>
         </scan>
         <range>
@@ -324,18 +287,13 @@
           <resolution>0.01</resolution>
         </range>
       </ray>
-      <plugin name="gazebo_ros_sonar_controller" filename="libhector_gazebo_ros_sonar.so">
-        <gaussianNoise>0.005</gaussianNoise>
-        <topicName>front_sonar_distance</topicName>
-        <frameId>front_sonar_link</frameId>
-      </plugin>
     </sensor>
   </gazebo>
 
   <!-- ***************************** Rear Sonar ***************************** -->
 
   <gazebo reference="rear_sonar_link">
-    <sensor type="ray" name="rear_sonar_sensor">
+    <sensor type="gpu_ray" name="rear_sonar_sensor">
       <always_on>true</always_on>
       <update_rate>10</update_rate>
       <pose>0 0 0 0 0 0</pose>
@@ -345,14 +303,14 @@
           <horizontal>
             <samples>2</samples>
             <resolution>1</resolution>
-            <min_angle>-28</min_angle>
-            <max_angle>28</max_angle>
+            <min_angle>-0.48</min_angle>
+            <max_angle>0.48</max_angle>
           </horizontal>
           <vertical>
             <samples>2</samples>
             <resolution>1</resolution>
-            <min_angle>-28</min_angle>
-            <max_angle>28</max_angle>
+            <min_angle>-0.48</min_angle>
+            <max_angle>0.48</max_angle>
           </vertical>
         </scan>
         <range>
@@ -361,80 +319,16 @@
           <resolution>0.01</resolution>
         </range>
       </ray>
-      <plugin name="gazebo_ros_sonar_controller" filename="libhector_gazebo_ros_sonar.so">
-        <gaussianNoise>0.005</gaussianNoise>
-        <topicName>rear_sonar_distance</topicName>
-        <frameId>rear_sonar_link</frameId>
-      </plugin>
     </sensor>
   </gazebo>
-
-  <!-- ***************************** stereo camera ***************************** -->
-
-  <!--
-  <gazebo reference="stereo_camera_link">
-    <sensor type="multicamera" name="stereo_camera">
-      <update_rate>30.0</update_rate>
-      <camera name="left">
-        <horizontal_fov>1.5707963</horizontal_fov>
-        <image>
-          <width>800</width>
-          <height>600</height>
-          <format>R8G8B8</format>
-        </image>
-        <clip>
-          <near>0.02</near>
-          <far>300</far>
-        </clip>
-        <noise>
-          <type>gaussian</type>
-          <mean>0.0</mean>
-          <stddev>0.007</stddev>
-        </noise>
-      </camera>
-      <camera name="right">
-        <pose>0 -0.07 0 0 0 0</pose>
-        <horizontal_fov>1.5707963</horizontal_fov>
-        <image>
-          <width>800</width>
-          <height>600</height>
-          <format>R8G8B8</format>
-        </image>
-        <clip>
-          <near>0.02</near>
-          <far>300</far>
-        </clip>
-        <noise>
-          <type>gaussian</type>
-          <mean>0.0</mean>
-          <stddev>0.007</stddev>
-        </noise>
-      </camera>
-      <plugin name="stereo_camera_controller" filename="libgazebo_ros_multicamera.so">
-        <alwaysOn>true</alwaysOn>
-        <updateRate>0.0</updateRate>
-        <cameraName>stereo/camera</cameraName>
-        <imageTopicName>image_raw</imageTopicName>
-        <cameraInfoTopicName>camera_info</cameraInfoTopicName>
-        <frameName>stereo_camera_link</frameName>
-        <hackBaseline>0.5</hackBaseline>
-        <distortionK1>0.0</distortionK1>
-        <distortionK2>0.0</distortionK2>
-        <distortionK3>0.0</distortionK3>
-        <distortionT1>0.0</distortionT1>
-        <distortionT2>0.0</distortionT2>
-      </plugin>
-    </sensor>
-  </gazebo>
-  -->
 
   <!-- Sensor providing ground truth Odometry of base_link -->
   <gazebo>
-     <plugin name="ground_truth" filename="libgazebo_ros_p3d.so">
-        <updateRate>30.0</updateRate>
-        <frameName>/world</frameName>  <!-- Frame of reference is the global coordinates -->
-        <bodyName>base_footprint</bodyName>
-        <topicName>base_footprint/odom</topicName>
+     <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
+        <odom_frame>world</odom_frame>
+        <robot_base_frame>base_footprint</robot_base_frame>
+        <odom_publish_frequency>30</odom_publish_frequency>
+        <odom_topic>base_footprint/odom</odom_topic>
      </plugin>
   </gazebo>
 

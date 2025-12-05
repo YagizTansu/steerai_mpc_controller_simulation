@@ -1,26 +1,26 @@
 Panels:
-  - Class: rviz/Displays
+  - Class: rviz_common/Displays
     Help Height: 108
     Name: Displays
     Property Tree Widget:
       Expanded: ~
       Splitter Ratio: 0.4746136963367462
     Tree Height: 342
-  - Class: rviz/Selection
+  - Class: rviz_common/Selection
     Name: Selection
-  - Class: rviz/Tool Properties
+  - Class: rviz_common/Tool Properties
     Expanded:
       - /2D Pose Estimate1
       - /2D Nav Goal1
       - /Publish Point1
     Name: Tool Properties
     Splitter Ratio: 0.5886790156364441
-  - Class: rviz/Views
+  - Class: rviz_common/Views
     Expanded:
       - /Current View1
     Name: Views
     Splitter Ratio: 0.5
-  - Class: rviz/Time
+  - Class: rviz_common/Time
     Name: Time
     SyncMode: 0
     SyncSource: Image
@@ -33,7 +33,7 @@ Visualization Manager:
   Displays:
     - Alpha: 0.5
       Cell Size: 1
-      Class: rviz/Grid
+      Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
       Enabled: true
       Line Style:
@@ -50,7 +50,7 @@ Visualization Manager:
       Reference Frame: <Fixed Frame>
       Value: true
     - Alpha: 1
-      Class: rviz/RobotModel
+      Class: rviz_default_plugins/RobotModel
       Collision Enabled: false
       Enabled: true
       Links:
@@ -259,7 +259,7 @@ Visualization Manager:
         Value: true
       Axis: Z
       Channel Name: ring
-      Class: rviz/PointCloud2
+      Class: rviz_default_plugins/PointCloud2
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
@@ -279,7 +279,7 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-    - Class: rviz/TF
+    - Class: rviz_default_plugins/TF
       Enabled: true
       Filter (blacklist): ""
       Filter (whitelist): ""
@@ -445,7 +445,7 @@ Visualization Manager:
       Value: true
     - Alpha: 0.5
       Buffer Length: 1
-      Class: rviz/Range
+      Class: rviz_default_plugins/Range
       Color: 32; 74; 135
       Enabled: false
       Name: Range
@@ -453,7 +453,7 @@ Visualization Manager:
       Topic: /rear_sonar_distance
       Unreliable: false
       Value: false
-    - Class: rviz/Image
+    - Class: rviz_default_plugins/Image
       Enabled: false
       Image Topic: /gem/front_single_camera/image_raw
       Max Value: 1
@@ -473,7 +473,7 @@ Visualization Manager:
         Value: true
       Axis: Z
       Channel Name: intensity
-      Class: rviz/LaserScan
+      Class: rviz_default_plugins/LaserScan
       Color: 255; 255; 255
       Color Transformer: AxisColor
       Decay Time: 0
@@ -496,7 +496,7 @@ Visualization Manager:
     - Align Bottom: false
       Background Alpha: 0.800000011920929
       Background Color: 0; 0; 0
-      Class: jsk_rviz_plugin/OverlayText
+      Class: jsk_rviz_plugins/OverlayText
       Enabled: true
       Foreground Alpha: 0.800000011920929
       Foreground Color: 25; 255; 240
@@ -514,7 +514,7 @@ Visualization Manager:
       text size: 12
       top: 0
       width: 128
-    - Class: rviz/Image
+    - Class: rviz_default_plugins/Image
       Enabled: true
       Image Topic: /gem/front_single_camera/image_raw
       Max Value: 1
@@ -528,7 +528,7 @@ Visualization Manager:
       Value: true
     - Alpha: 1
       Buffer Length: 1
-      Class: rviz/Path
+      Class: rviz_default_plugins/Path
       Color: 25; 255; 0
       Enabled: true
       Head Diameter: 0.30000001192092896
@@ -550,7 +550,7 @@ Visualization Manager:
       Topic: /gem/global_path
       Unreliable: false
       Value: true
-    - Class: rviz/Marker
+    - Class: rviz_default_plugins/Marker
       Enabled: true
       Marker Topic: /gem/target_point
       Name: Marker
@@ -558,7 +558,7 @@ Visualization Manager:
         target_point: true
       Queue Size: 10
       Value: true
-    - Class: rviz/Marker
+    - Class: rviz_default_plugins/Marker
       Enabled: true
       Marker Topic: /gem/stats_text
       Name: Marker
@@ -574,26 +574,26 @@ Visualization Manager:
     Frame Rate: 30
   Name: root
   Tools:
-    - Class: rviz/Interact
+    - Class: rviz_default_plugins/Interact
       Hide Inactive Objects: true
-    - Class: rviz/MoveCamera
-    - Class: rviz/Select
-    - Class: rviz/FocusCamera
-    - Class: rviz/Measure
-    - Class: rviz/SetInitialPose
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+    - Class: rviz_default_plugins/SetInitialPose
       Theta std deviation: 0.2617993950843811
       Topic: /initialpose
       X std deviation: 0.5
       Y std deviation: 0.5
-    - Class: rviz/SetGoal
+    - Class: rviz_default_plugins/SetGoal
       Topic: /move_base_simple/goal
-    - Class: rviz/PublishPoint
+    - Class: rviz_default_plugins/PublishPoint
       Single click: true
       Topic: /clicked_point
   Value: true
   Views:
     Current:
-      Class: rviz/Orbit
+      Class: rviz_default_plugins/Orbit
       Distance: 47.664852142333984
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
