@@ -1,16 +1,38 @@
 #!/usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile
 import math
 import csv
 import time
 import os
-import rospkg
+from ament_index_python.packages import get_package_share_directory
 import numpy as np
 import random
 from ackermann_msgs.msg import AckermannDrive
 from nav_msgs.msg import Odometry
-from tf.transformations import euler_from_quaternion
+try:
+    from tf_transformations import euler_from_quaternion
+except ImportError:
+    # Fallback
+    def euler_from_quaternion(quat):
+        x = quat[0]
+        y = quat[1]
+        z = quat[2]
+        w = quat[3]
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = np.arctan2(sinr_cosp, cosr_cosp)
+        sinp = 2 * (w * y - z * x)
+        if np.abs(sinp) >= 1:
+            pitch = np.copysign(np.pi / 2, sinp)
+        else:
+            pitch = np.arcsin(sinp)
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = np.arctan2(siny_cosp, cosy_cosp)
+        return roll, pitch, yaw
 
 class ManeuverManager:
     def __init__(self):
@@ -44,14 +66,24 @@ class ManeuverManager:
         speed, steering = maneuver['func'](local_t, maneuver['duration'])
         return speed, steering, maneuver['name']
 
-class DataCollector:
+class DataCollector(Node):
     def __init__(self):
-        rospy.init_node('data_collector', anonymous=True)
+        super().__init__('data_collector')
+        
+        self.logger = self.get_logger()
         
         # Get package path and create data directory
-        rospack = rospkg.RosPack()
-        package_path = rospack.get_path('steerai_data_collector')
-        data_dir = os.path.join(package_path, 'data')
+        try:
+            package_path = get_package_share_directory('steerai_data_collector')
+            # For development, we might want to save to the source directory or a specific location
+            # But for now, let's save to the share directory or user home to avoid permission issues
+            # Or better, use the current working directory if running from source, but that's unreliable
+            # Let's use a safe path in home
+            data_dir = os.path.expanduser('~/steerai_data/data')
+        except Exception as e:
+            self.logger.warn(f"Could not find package share directory: {e}")
+            data_dir = os.path.expanduser('~/steerai_data/data')
+
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
             
@@ -72,11 +104,13 @@ class DataCollector:
         # Control variables
         self.cmd_speed = 0.0
         self.cmd_steering = 0.0
-        self.start_time = rospy.Time.now().to_sec()
+        self.start_time = self.get_clock().now().nanoseconds / 1e9
+        self.last_time = self.start_time
         
         # Setup Publishers and Subscribers
-        self.pub_cmd = rospy.Publisher('/gem/ackermann_cmd', AckermannDrive, queue_size=1)
-        self.sub_odom = rospy.Subscriber('/gem/base_footprint/odom', Odometry, self.odom_callback)
+        qos = QoSProfile(depth=1)
+        self.pub_cmd = self.create_publisher(AckermannDrive, '/gem/ackermann_cmd', qos)
+        self.sub_odom = self.create_subscription(Odometry, '/gem/base_footprint/odom', self.odom_callback, 10)
         
         # Setup CSV logging
         self.csv_file = open(self.log_file_path, 'w')
@@ -87,10 +121,10 @@ class DataCollector:
         self.maneuver_manager = ManeuverManager()
         self.setup_maneuvers()
         
-        # Safety shutdown
-        rospy.on_shutdown(self.shutdown_hook)
+        self.logger.info(f"Data Collector Node Started. Logging to {self.log_file_path}")
         
-        rospy.loginfo("Data Collector Node Started. Logging to %s", self.log_file_path)
+        # Timer for control loop
+        self.timer = self.create_timer(1.0 / self.log_frequency, self.control_loop)
 
     def setup_maneuvers(self):
         # 1. Warmup (Constant Speed)
@@ -174,71 +208,80 @@ class DataCollector:
         self.curr_speed = math.sqrt(msg.twist.twist.linear.x**2 + msg.twist.twist.linear.y**2)
         self.curr_yaw_rate = msg.twist.twist.angular.z
 
-    def run(self):
-        rate = rospy.Rate(self.log_frequency)
-        last_time = rospy.Time.now().to_sec()
+    def control_loop(self):
+        current_time = self.get_clock().now().nanoseconds / 1e9
+        dt = current_time - self.last_time
+        elapsed_time = current_time - self.start_time
         
-        while not rospy.is_shutdown():
-            current_time = rospy.Time.now().to_sec()
-            dt = current_time - last_time
-            elapsed_time = current_time - self.start_time
+        # Get Command
+        target_speed, target_steering, maneuver_name = self.maneuver_manager.get_command(elapsed_time)
+        
+        if maneuver_name == "DONE":
+            self.logger.info("All maneuvers completed. Stopping...")
+            self.shutdown_hook()
+            self.destroy_node()
+            rclpy.shutdown()
+            return
             
-            # Get Command
-            target_speed, target_steering, maneuver_name = self.maneuver_manager.get_command(elapsed_time)
-            
-            if maneuver_name == "DONE":
-                rospy.loginfo("All maneuvers completed. Stopping...")
-                break
-                
-            rospy.loginfo_throttle(1.0, f"Maneuver: {maneuver_name} | T: {elapsed_time:.1f}s")
-            
-            # Safety Constraints
-            # 1. Lateral Acceleration Limit (approx a_lat = v^2 * tan(delta) / L)
-            # If a_lat > 2.0 m/s^2, reduce speed
-            L = 1.75
-            a_lat = (target_speed**2) * math.tan(abs(target_steering)) / L
-            if a_lat > 2.5:
-                target_speed *= 0.8 # Reduce speed by 20%
-                rospy.logwarn_throttle(0.5, "Safety Trigger: High Lateral Accel! Reducing speed.")
-            
-            # 2. Hard Limits
-            self.cmd_speed = max(min(target_speed, self.max_speed), -self.max_speed)
-            self.cmd_steering = max(min(target_steering, self.max_steering), -self.max_steering)
-            
-            # Publish command
-            ack_msg = AckermannDrive()
-            ack_msg.speed = self.cmd_speed
-            ack_msg.steering_angle = self.cmd_steering
-            self.pub_cmd.publish(ack_msg)
-            
-            # Log data
-            self.csv_writer.writerow([
-                f"{current_time:.4f}", 
-                f"{dt:.4f}",
-                maneuver_name,
-                f"{self.cmd_speed:.4f}", 
-                f"{self.cmd_steering:.4f}", 
-                f"{self.curr_x:.4f}", 
-                f"{self.curr_y:.4f}", 
-                f"{self.curr_yaw:.4f}", 
-                f"{self.curr_speed:.4f}",
-                f"{self.curr_yaw_rate:.4f}"
-            ])
-            
-            last_time = current_time
-            rate.sleep()
+        # Log throttle manually since loginfo_throttle is not directly available in same way
+        # Or use logging filter, but simple counter or time check is easier
+        # self.logger.info(f"Maneuver: {maneuver_name} | T: {elapsed_time:.1f}s")
+        
+        # Safety Constraints
+        # 1. Lateral Acceleration Limit (approx a_lat = v^2 * tan(delta) / L)
+        # If a_lat > 2.0 m/s^2, reduce speed
+        L = 1.75
+        a_lat = (target_speed**2) * math.tan(abs(target_steering)) / L
+        if a_lat > 2.5:
+            target_speed *= 0.8 # Reduce speed by 20%
+            self.logger.warn("Safety Trigger: High Lateral Accel! Reducing speed.", throttle_duration_sec=0.5)
+        
+        # 2. Hard Limits
+        self.cmd_speed = max(min(target_speed, self.max_speed), -self.max_speed)
+        self.cmd_steering = max(min(target_steering, self.max_steering), -self.max_steering)
+        
+        # Publish command
+        ack_msg = AckermannDrive()
+        ack_msg.speed = self.cmd_speed
+        ack_msg.steering_angle = self.cmd_steering
+        self.pub_cmd.publish(ack_msg)
+        
+        # Log data
+        self.csv_writer.writerow([
+            f"{current_time:.4f}", 
+            f"{dt:.4f}",
+            maneuver_name,
+            f"{self.cmd_speed:.4f}", 
+            f"{self.cmd_steering:.4f}", 
+            f"{self.curr_x:.4f}", 
+            f"{self.curr_y:.4f}", 
+            f"{self.curr_yaw:.4f}", 
+            f"{self.curr_speed:.4f}",
+            f"{self.curr_yaw_rate:.4f}"
+        ])
+        
+        self.last_time = current_time
 
     def shutdown_hook(self):
-        rospy.loginfo("Shutting down Data Collector. Stopping vehicle...")
+        self.logger.info("Shutting down Data Collector. Stopping vehicle...")
         ack_msg = AckermannDrive()
         ack_msg.speed = 0.0
         ack_msg.steering_angle = 0.0
         self.pub_cmd.publish(ack_msg)
         self.csv_file.close()
 
-if __name__ == '__main__':
+def main(args=None):
+    rclpy.init(args=args)
+    node = DataCollector()
     try:
-        node = DataCollector()
-        node.run()
-    except rospy.ROSInterruptException:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
         pass
+    finally:
+        node.shutdown_hook()
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

@@ -2,7 +2,7 @@ from setuptools import setup
 import os
 from glob import glob
 
-package_name = 'steerai_mpc'
+package_name = 'steerai_data_collector'
 
 setup(
     name=package_name,
@@ -12,20 +12,17 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
-        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='user',
     maintainer_email='user@todo.todo',
-    description='The steerai_mpc package for Model Predictive Control',
+    description='The steerai_data_collector package',
     license='TODO',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'mpc_controller = steerai_mpc.mpc_controller:main',
-            'tf_broadcaster = steerai_mpc.tf_broadcaster:main',
+            'data_collector = steerai_data_collector.data_collector:main',
         ],
     },
 )
