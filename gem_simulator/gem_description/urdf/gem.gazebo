@@ -209,6 +209,7 @@
       <max_velocity>10</max_velocity>
       <min_acceleration>-5</min_acceleration>
       <max_acceleration>5</max_acceleration>
+      <topic>/cmd_vel</topic>
     </plugin>
   </gazebo>
 

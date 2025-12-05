@@ -16,6 +16,8 @@
   <exec_depend>ackermann_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
 
+  <exec_depend>casadi</exec_depend>
+
   <export>
     <build_type>ament_python</build_type>
   </export>

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from ackermann_msgs.msg import AckermannDrive
 import sys, select, termios, tty
 
@@ -27,7 +28,7 @@ moveBindings = {
     's':(0,0),
 }
 
-def getKey():
+def getKey(settings):
     tty.setraw(sys.stdin.fileno())
     rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
     if rlist:
@@ -37,11 +38,12 @@ def getKey():
     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
     return key
 
-if __name__=="__main__":
+def main():
     settings = termios.tcgetattr(sys.stdin)
     
-    rospy.init_node('gem_teleop')
-    pub = rospy.Publisher('/gem/ackermann_cmd', AckermannDrive, queue_size=5)
+    rclpy.init()
+    node = rclpy.create_node('gem_teleop')
+    pub = node.create_publisher(AckermannDrive, '/gem/ackermann_cmd', 10)
 
     speed = 0.0
     turn = 0.0
@@ -57,7 +59,7 @@ if __name__=="__main__":
     try:
         print(msg)
         while(1):
-            key = getKey()
+            key = getKey(settings)
             if key in moveBindings.keys():
                 if key == 's':
                     target_speed = 0.0
@@ -90,3 +92,8 @@ if __name__=="__main__":
         pub.publish(ackermann_cmd)
 
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__=="__main__":
+    main()

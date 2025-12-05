@@ -16,7 +16,7 @@ setup(
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_name, 'paths'), glob('paths/*.csv')),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'casadi'],
     zip_safe=True,
     maintainer='yagiz',
     maintainer_email='yagiz@todo.todo',

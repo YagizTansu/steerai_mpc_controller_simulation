@@ -22,6 +22,7 @@ install(DIRECTORY config launch models worlds media
 install(PROGRAMS
   scripts/gem_ackermann_to_twist.py
   scripts/gem_sensor_info.py
+  scripts/simple_teleop.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
