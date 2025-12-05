@@ -1,10 +1,11 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess, AppendEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     # Package Directories
@@ -12,6 +13,13 @@ def generate_launch_description():
     pkg_gem_description = get_package_share_directory('gem_description')
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
     pkg_steerai_mpc = get_package_share_directory('steerai_mpc')
+    
+    # Set Gazebo Resource Path to include gem_description
+    pkg_gem_description_prefix = os.path.dirname(pkg_gem_description)
+    set_gz_resource_path = AppendEnvironmentVariable(
+        'GZ_SIM_RESOURCE_PATH',
+        pkg_gem_description_prefix
+    )
 
     # Arguments
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
@@ -40,7 +48,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'use_sim_time': use_sim_time,
-            'robot_description': robot_description_content
+            'robot_description': ParameterValue(robot_description_content, value_type=str)
         }]
     )
 
@@ -134,6 +142,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        set_gz_resource_path,
         DeclareLaunchArgument('use_sim_time', default_value='true', description='Use simulation (Gazebo) clock'),
         DeclareLaunchArgument('world_name', default_value='simple_track_green.world', description='World file name'),
         
