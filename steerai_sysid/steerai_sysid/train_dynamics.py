@@ -6,7 +6,7 @@ import torch.optim as optim
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import rospkg
+from ament_index_python.packages import get_package_share_directory
 import os
 import joblib
 from sklearn.preprocessing import StandardScaler
@@ -37,9 +37,19 @@ class DynamicsModel(nn.Module):
 
 def train_model():
     # 1. Load Data
-    rospack = rospkg.RosPack()
-    data_dir = os.path.join(rospack.get_path('steerai_data_collector'), 'data')
+    try:
+        # Try to find data in the share directory (installed)
+        data_dir = os.path.join(get_package_share_directory('steerai_data_collector'), 'data')
+        if not os.path.exists(data_dir):
+             # Fallback to home directory if running from source/dev
+            data_dir = os.path.expanduser('~/steerai_data/data')
+    except Exception:
+        data_dir = os.path.expanduser('~/steerai_data/data')
     
+    if not os.path.exists(data_dir):
+        print(f"Error: Data directory not found: {data_dir}")
+        return
+
     # Find latest training_data_*.csv or training_data.csv
     files = [f for f in os.listdir(data_dir) if f.startswith('training_data') and f.endswith('.csv')]
     if not files:
@@ -93,9 +103,24 @@ def train_model():
     y_scaled = scaler_y.fit_transform(y)
     
     # Save scalers
-    output_dir = rospack.get_path('steerai_sysid')
-    joblib.dump(scaler_X, os.path.join(output_dir, 'scaler_X.pkl'))
-    joblib.dump(scaler_y, os.path.join(output_dir, 'scaler_y.pkl'))
+    try:
+        output_dir = get_package_share_directory('steerai_sysid')
+    except Exception:
+        # Fallback for development
+        output_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # If we are in the installed location, we might not have write permissions.
+    # So let's save to the source directory if possible, or a local dir.
+    # For this script, it's likely run by the user, so let's save to where the script is or a specific model dir.
+    # Let's try to save to the package directory if writable, otherwise home.
+    
+    # Actually, let's save to the same place as data or a 'models' folder in home
+    model_dir = os.path.expanduser('~/steerai_data/models')
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+        
+    joblib.dump(scaler_X, os.path.join(model_dir, 'scaler_X.pkl'))
+    joblib.dump(scaler_y, os.path.join(model_dir, 'scaler_y.pkl'))
     
     # Split Data
     X_train, X_val, y_train, y_val = train_test_split(X_scaled, y_scaled, test_size=0.2, random_state=42)
@@ -141,8 +166,8 @@ def train_model():
             print(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {loss.item():.4f}, Val Loss: {val_loss.item():.4f}')
             
     # Save Model
-    torch.save(model.state_dict(), os.path.join(output_dir, 'dynamics_model.pth'))
-    print("Model saved.")
+    torch.save(model.state_dict(), os.path.join(model_dir, 'dynamics_model.pth'))
+    print(f"Model saved to {model_dir}")
     
     # 6. Evaluation & Visualization
     model.eval()
@@ -190,8 +215,8 @@ def train_model():
     plt.title('Delta Yaw Prediction (First 100 samples)')
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'training_results.png'))
-    print(f"Plots saved to {os.path.join(output_dir, 'training_results.png')}")
+    plt.savefig(os.path.join(model_dir, 'training_results.png'))
+    print(f"Plots saved to {os.path.join(model_dir, 'training_results.png')}")
     # plt.show() # Cannot show plot in headless environment
 
 if __name__ == '__main__':
