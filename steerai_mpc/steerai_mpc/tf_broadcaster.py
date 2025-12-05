@@ -12,7 +12,7 @@ class TFBroadcaster(Node):
         super().__init__('tf_broadcaster')
         
         self.br = tf2_ros.TransformBroadcaster(self)
-        self.sub = self.create_subscription(Odometry, '/base_footprint/odom', self.odom_callback, 10)
+        self.sub = self.create_subscription(Odometry, '/gem/base_footprint/odom', self.odom_callback, 10)
         
         self.get_logger().info("TF Broadcaster Started: world -> base_footprint")
 
