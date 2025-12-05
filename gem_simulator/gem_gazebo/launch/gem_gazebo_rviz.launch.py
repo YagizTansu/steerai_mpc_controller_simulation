@@ -96,7 +96,7 @@ def generate_launch_description():
         executable='parameter_bridge',
         arguments=[
             '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
-            '/base_footprint/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+            '/gem/base_footprint/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
             '/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model', # This might be wrong, JointState in Gz is different.
             # Usually we use specific topic for joint states if the plugin publishes it.
             # AckermannSteering plugin might not publish joint states for all wheels in a standard way?
