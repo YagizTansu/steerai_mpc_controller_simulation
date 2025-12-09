@@ -21,6 +21,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from vehicle_model import VehicleModel
 from mpc_solver import MPCSolver
+from acados_mpc_solver import AcadosMPCSolver
 from path_manager import PathManager
 
 class MPCController:
@@ -63,10 +64,35 @@ class MPCController:
                 'max_cpu_time': self.solver_max_cpu_time,
                 'hessian_approximation': 'exact',
                 'limited_memory_max_history': 6,
+            },
+            'acados': {
+                'solver_type': self.acados_solver_type,
+                'qp_solver': self.acados_qp_solver,
+                'qp_solver_iter_max': self.acados_qp_solver_iter_max,
+                'hessian_approx': self.acados_hessian_approx,
+                'integrator_type': self.acados_integrator_type,
+                'nlp_solver_max_iter': self.acados_nlp_solver_max_iter,
+                'globalization': self.acados_globalization,
+                'code_export_dir': self.acados_code_export_dir,
+                'code_export': self.acados_code_export,
             }
         }
         
-        self.solver = MPCSolver(self.vehicle_model, solver_params)
+        # Initialize solver (acados or IPOPT)
+        if self.use_acados:
+            try:
+                rospy.loginfo("Initializing Acados MPC Solver...")
+                self.solver = AcadosMPCSolver(self.vehicle_model, solver_params)
+                rospy.loginfo("✓ Acados solver initialized successfully")
+            except Exception as e:
+                rospy.logerr(f"✗ Failed to initialize Acados solver: {e}")
+                rospy.logwarn("Falling back to CasADi IPOPT solver...")
+                self.solver = MPCSolver(self.vehicle_model, solver_params)
+                rospy.loginfo("✓ IPOPT solver initialized as fallback")
+        else:
+            rospy.loginfo("Initializing CasADi IPOPT Solver...")
+            self.solver = MPCSolver(self.vehicle_model, solver_params)
+            rospy.loginfo("✓ IPOPT solver initialized")
         
         # ROS Setup
         self.pub_cmd = rospy.Publisher('/gem/ackermann_cmd', AckermannDrive, queue_size=1)
@@ -128,6 +154,18 @@ class MPCController:
         self.solver_acceptable_tol = rospy.get_param(param_ns + 'solver/acceptable_tol', 2e-1)
         self.solver_acceptable_iter = rospy.get_param(param_ns + 'solver/acceptable_iter', 5)
         self.solver_max_cpu_time = rospy.get_param(param_ns + 'solver/max_cpu_time', 0.09)
+        
+        # Acados Solver Parameters
+        self.use_acados = rospy.get_param(param_ns + 'use_acados', True)  # Default: use acados
+        self.acados_solver_type = rospy.get_param(param_ns + 'acados/solver_type', 'SQP_RTI')
+        self.acados_qp_solver = rospy.get_param(param_ns + 'acados/qp_solver', 'PARTIAL_CONDENSING_HPIPM')
+        self.acados_qp_solver_iter_max = rospy.get_param(param_ns + 'acados/qp_solver_iter_max', 50)
+        self.acados_hessian_approx = rospy.get_param(param_ns + 'acados/hessian_approx', 'GAUSS_NEWTON')
+        self.acados_integrator_type = rospy.get_param(param_ns + 'acados/integrator_type', 'DISCRETE')
+        self.acados_nlp_solver_max_iter = rospy.get_param(param_ns + 'acados/nlp_solver_max_iter', 1)
+        self.acados_globalization = rospy.get_param(param_ns + 'acados/globalization', 'MERIT_BACKTRACKING')
+        self.acados_code_export_dir = rospy.get_param(param_ns + 'acados/code_export_dir', 'c_generated_code')
+        self.acados_code_export = rospy.get_param(param_ns + 'acados/code_export', False)
         
         # Control
         self.target_speed = rospy.get_param(param_ns + 'control/target_speed', 5.556)

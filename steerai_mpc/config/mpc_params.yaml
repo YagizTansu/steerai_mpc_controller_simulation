@@ -2,6 +2,17 @@
 # This file contains all configurable parameters for the Model Predictive Controller
 
 # ============================================================================
+# SOLVER SELECTION
+# Choose between Acados (fast) or CasADi IPOPT (fallback)
+# ============================================================================
+# Enable/disable acados solver
+# Set to true to use high-performance acados solver (10-100x faster)
+# Set to false to use traditional CasADi + IPOPT solver
+# Default: true
+use_acados: true
+
+
+# ============================================================================
 # VEHICLE CONSTRAINTS
 # Physical limits of the POLARIS GEM e2 vehicle
 # ============================================================================
@@ -160,3 +171,62 @@ control:
   # How often MPC solver runs and publishes commands
   # Must be compatible with solver max_cpu_time
   loop_rate: 10
+
+# ============================================================================
+# ACADOS SOLVER PARAMETERS
+# High-performance optimization solver settings
+# ============================================================================
+acados:
+  # Solver type
+  # Options: 'SQP' (Sequential Quadratic Programming) or 'SQP_RTI' (Real-Time Iteration)
+  # Default: 'SQP_RTI'
+  # RTI provides guaranteed real-time performance with single iteration per solve
+  solver_type: 'SQP_RTI'
+  
+  # QP (Quadratic Programming) solver
+  # Options: 'PARTIAL_CONDENSING_HPIPM', 'FULL_CONDENSING_QPOASES', 'FULL_CONDENSING_HPIPM'
+  # Default: 'PARTIAL_CONDENSING_HPIPM' (fastest for medium-sized problems)
+  # HPIPM is optimized for embedded systems and real-time applications
+  qp_solver: 'PARTIAL_CONDENSING_HPIPM'
+  
+  # Maximum QP solver iterations
+  # Range: 10 - 500
+  # Default: 50
+  # More iterations = higher accuracy but slower
+  qp_solver_iter_max: 50
+  
+  # Hessian approximation method
+  # Options: 'GAUSS_NEWTON' or 'EXACT'
+  # Default: 'GAUSS_NEWTON'
+  # Gauss-Newton is faster and works well for least-squares problems
+  hessian_approx: 'GAUSS_NEWTON'
+  
+  # Integrator type
+  # Options: 'ERK' (Explicit Runge-Kutta), 'IRK' (Implicit RK), 'DISCRETE'
+  # Default: 'DISCRETE'
+  # We use discrete-time model (neural network already provides x_next)
+  integrator_type: 'DISCRETE'
+  
+  # Maximum NLP (Nonlinear Programming) solver iterations
+  # Range: 1 - 100
+  # Default: 1 (for RTI mode)
+  # RTI mode uses single iteration for real-time guarantee
+  nlp_solver_max_iter: 1
+  
+  # Globalization strategy (only for SQP, not SQP_RTI)
+  # Options: 'MERIT_BACKTRACKING', 'FIXED_STEP'
+  # Default: 'MERIT_BACKTRACKING'
+  # Helps with convergence when optimization landscape is difficult
+  globalization: 'MERIT_BACKTRACKING'
+  
+  # Code export directory
+  # Directory where acados generates C code
+  # Default: 'c_generated_code'
+  code_export_dir: 'c_generated_code'
+  
+  # Code generation and compilation (advanced)
+  # Set to true to compile and use generated C code (faster execution)
+  # Set to false for easier debugging and development
+  # Default: false
+  code_export: false
+

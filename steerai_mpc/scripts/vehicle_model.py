@@ -148,3 +148,39 @@ class VehicleModel:
         next_v = curr_v + delta_v_pred # Residual update
         
         return ca.vertcat(next_x, next_y, next_yaw, next_v)
+    
+    def export_acados_model(self):
+        """
+        Export vehicle dynamics model in acados-compatible format.
+        
+        Returns a CasADi function that represents the discrete-time dynamics:
+        x_{k+1} = f_discrete(x_k, u_k)
+        
+        :return: Tuple (model_name, f_discrete_func)
+                 - model_name: String identifier for the model
+                 - f_discrete_func: CasADi Function with signature f(x, u) -> x_next
+        """
+        # Define symbolic variables for acados
+        x = ca.MX.sym('x', 4)  # State: [x, y, yaw, v]
+        u = ca.MX.sym('u', 2)  # Control: [cmd_v, cmd_steer]
+        
+        # Extract state and control components
+        curr_v = x[3]
+        cmd_steer = u[1]
+        
+        # Estimate yaw_rate kinematically (same as in mpc_solver.py)
+        # yaw_rate = v * tan(delta) / L
+        L = 1.75  # Wheelbase (meters) - POLARIS GEM e2
+        yaw_rate = curr_v * ca.tan(cmd_steer) / L
+        
+        # Compute next state using neural network dynamics
+        x_next = self.get_next_state(x, yaw_rate, u)
+        
+        # Create CasADi function for discrete-time dynamics
+        model_name = 'vehicle_nn_dynamics'
+        f_discrete = ca.Function('f_discrete', [x, u], [x_next],
+                                  ['x', 'u'], ['x_next'])
+        
+        rospy.loginfo(f"VehicleModel: Acados model '{model_name}' exported successfully.")
+        
+        return model_name, f_discrete
