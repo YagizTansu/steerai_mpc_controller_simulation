@@ -9,14 +9,16 @@ import casadi as ca
 import rospy
 
 class VehicleModel:
-    def __init__(self, dt=0.1):
+    def __init__(self, dt=0.1, wheelbase=1.75):
         """
         Initialize Vehicle Model.
         Handles loading of Neural Network dynamics and provides symbolic expressions.
         
         :param dt: Time step
+        :param wheelbase: Vehicle wheelbase (meters)
         """
         self.dt = dt
+        self.wheelbase = wheelbase
         
         # Load Model and Scalers
         self.load_model()
@@ -121,12 +123,12 @@ class VehicleModel:
         
         return np.array([next_x, next_y, next_yaw, next_v])
     
-    def get_next_state(self, curr_state, current_yaw_rate, control_input):
+    def get_next_state(self, curr_state, control_input):
         """
         Returns the symbolic expression for the next state using Neural Network dynamics.
         
         :param curr_state: CasADi variable [x, y, yaw, v]
-        :param current_yaw_rate: CasADi variable or float (yaw rate)
+        :param curr_state: CasADi variable [x, y, yaw, v]
         :param control_input: CasADi variable [cmd_v, cmd_steer]
         :return: Next state symbolic expression [x_next, y_next, yaw_next, v_next]
         """
@@ -137,6 +139,10 @@ class VehicleModel:
         
         cmd_v = control_input[0]
         cmd_steer = control_input[1]
+        
+        # Calculate Kinematic Yaw Rate for Model Input
+        # yaw_rate = v * tan(delta) / L
+        current_yaw_rate = curr_v * ca.tan(cmd_steer) / self.wheelbase
         
         # Neural Network prediction
         delta_v_pred, delta_yaw_pred = self._neural_net_dynamics(curr_v, current_yaw_rate, cmd_v, cmd_steer)

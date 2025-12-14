@@ -10,17 +10,24 @@ vehicle:
   # Range: 0.1 - 10.0
   # Default: 5.556 m/s (exactly 20 km/h - project requirement)
   # Higher values allow faster driving but may reduce control accuracy
-  # Maximum velocity (m/s)
-  # Range: 0.1 - 10.0
-  # Default: 5.556 m/s (exactly 20 km/h - project requirement)
-  # Higher values allow faster driving but may reduce control accuracy
   v_max: 5.40
+
+  # Vehicle Wheelbase (meters)
+  # Distance between front and rear axles
+  # Default: 1.75 m (Polaris GEM e2)
+  wheelbase: 1.75
   
   # Maximum steering angle (radians)
   # Range: 0.1 - 1.5 rad
   # Default: 0.6 rad (~34 degrees)
   # This limits how sharply the vehicle can turn
   delta_max: 0.6
+
+  # Maximum Cross Track Error (meters)
+  # Range: 0.1 - 2.0 m
+  # Default: 1.0 m
+  # Soft constraint: Solver applies heavy penalty if vehicle deviates more than this
+  cte_max: 1.0
 
 # ============================================================================
 # MPC PARAMETERS
@@ -89,6 +96,12 @@ weights:
   # Too high: very smooth acceleration/braking but slow speed changes
   # Too low: jerky speed changes, uncomfortable ride
   acceleration_smooth: 5.0
+  
+  # Cross Track Error (Constraint) weight
+  # Range: 0.0 - 5000.0
+  # Default: 1000.0
+  # Penalty for violating the soft CTE constraint
+  cte: 1000.0
 
 # ============================================================================
 # SOLVER PARAMETERS (IPOPT)
@@ -143,10 +156,10 @@ solver:
 control:
   # Target cruising speed (m/s)
   # Range: 0.1 - 8.0
-  # Default: 5.556 m/s (20 km/h - project requirement)
+  # Default: 5.2 m/s (20 km/h - project requirement)
   # This is the desired speed the MPC will try to maintain
   # Note: Must be <= v_max (vehicle constraint)
-  target_speed: 5.56
+  target_speed: 5.2
   
   # Goal reached tolerance (meters)
   # Range: 0.1 - 2.0

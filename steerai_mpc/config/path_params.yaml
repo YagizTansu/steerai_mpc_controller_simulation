@@ -90,5 +90,4 @@ velocity_profile:
   # Initial speed at the very beginning (m/s)
   # The speed the vehicle starts with before accelerating
   # Should be low but not zero to ensure smooth start
-  # Default: 1.0
   initial_speed: 0.5

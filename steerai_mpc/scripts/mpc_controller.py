@@ -31,7 +31,7 @@ class MPCController:
         self.load_parameters()
         
         # Initialize Modules
-        self.vehicle_model = VehicleModel(dt=self.dt)
+        self.vehicle_model = VehicleModel(dt=self.dt, wheelbase=self.wheelbase)
         
         self.path_manager = PathManager(param_namespace='~path_manager')
         # Set initial target speed
@@ -44,14 +44,16 @@ class MPCController:
             'constraints': {
                 'v_max': self.v_max,
                 'delta_max': self.delta_max,
-                'cte_max': self.cte_max
+                'cte_max': self.cte_max,
+                'wheelbase': self.wheelbase
             },
             'weights': {
                 'position': self.weight_position,
                 'heading': self.weight_heading,
                 'velocity': self.weight_velocity,
                 'steering_smooth': self.weight_steering_smooth,
-                'acceleration_smooth': self.weight_acceleration_smooth
+                'acceleration_smooth': self.weight_acceleration_smooth,
+                'cte': self.weight_cte
             },
             'target_speed': self.target_speed,
             'solver_opts': {
@@ -107,6 +109,7 @@ class MPCController:
         
         # Vehicle
         self.v_max = rospy.get_param(param_ns + 'vehicle/v_max', 5.5)
+        self.wheelbase = rospy.get_param(param_ns + 'vehicle/wheelbase', 1.75)
         self.delta_max = rospy.get_param(param_ns + 'vehicle/delta_max', 0.6)
         self.cte_max = rospy.get_param(param_ns + 'vehicle/cte_max', 1.0)
                 
@@ -120,6 +123,7 @@ class MPCController:
         self.weight_velocity = rospy.get_param(param_ns + 'weights/velocity', 1.0)
         self.weight_steering_smooth = rospy.get_param(param_ns + 'weights/steering_smooth', 5.0)
         self.weight_acceleration_smooth = rospy.get_param(param_ns + 'weights/acceleration_smooth', 0.1)
+        self.weight_cte = rospy.get_param(param_ns + 'weights/cte', 1000.0)
         
         # Solver
         self.solver_max_iter = rospy.get_param(param_ns + 'solver/max_iter', 900)
@@ -144,7 +148,8 @@ class MPCController:
             'heading': config.weight_heading,
             'velocity': config.weight_velocity,
             'steering_smooth': config.weight_steering_smooth,
-            'acceleration_smooth': config.weight_acceleration_smooth
+            'acceleration_smooth': config.weight_acceleration_smooth,
+            'cte': config['weight_cte'] if 'weight_cte' in config else 1000.0
         }
         
         if hasattr(self, 'solver'):
@@ -344,7 +349,7 @@ class MPCController:
             ref_traj = ref_traj.T
             
             # Solve MPC
-            cmd_v, cmd_steer, success = self.solver.solve(predicted_state, ref_traj)
+            cmd_v, cmd_steer, success = self.solver.solve(predicted_state, ref_traj, self.last_cmd)
             
             # Store command for next delay compensation
             self.last_cmd = np.array([cmd_v, cmd_steer])

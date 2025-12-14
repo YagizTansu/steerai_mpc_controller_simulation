@@ -29,10 +29,9 @@ class MPCSolver:
         self.prev_X = np.zeros((4, self.T + 1))
         self.prev_U = np.zeros((2, self.T))
         
-        # Initialize warm start with target speed to avoid infeasibility
-        target_speed = params.get('target_speed', 5.0)
-        self.prev_X[3, :] = target_speed
-        self.prev_U[0, :] = target_speed
+        # Initialize warm start with zeros
+        self.prev_X[3, :] = 0.0
+        self.prev_U[0, :] = 0.0
 
     def update_weights(self, new_weights):
         """Update cost function weights dynamically."""
@@ -44,6 +43,7 @@ class MPCSolver:
         self.opti.set_value(self.W_vel, self.weights['velocity'])
         self.opti.set_value(self.W_steer, self.weights['steering_smooth'])
         self.opti.set_value(self.W_acc, self.weights['acceleration_smooth'])
+        self.opti.set_value(self.W_cte, self.weights['cte'])
 
     def setup_solver(self):
         """Setup CasADi Opti stack."""
@@ -63,6 +63,10 @@ class MPCSolver:
         self.W_vel = self.opti.parameter()
         self.W_steer = self.opti.parameter()
         self.W_acc = self.opti.parameter()
+        self.W_cte = self.opti.parameter()
+
+        # Last Command (for smoothness at k=0)
+        self.LastCmd = self.opti.parameter(2) # [cmd_v, cmd_steer]
         
         # Initialize weight parameters
         self.opti.set_value(self.W_pos, self.weights['position'])
@@ -70,10 +74,17 @@ class MPCSolver:
         self.opti.set_value(self.W_vel, self.weights['velocity'])
         self.opti.set_value(self.W_steer, self.weights['steering_smooth'])
         self.opti.set_value(self.W_acc, self.weights['acceleration_smooth'])
+        self.opti.set_value(self.W_cte, self.weights['cte'])
         
         # Cost Function
         obj = 0
-        for k in range(self.T):
+        
+        # 1. Smoothness for the very first step (k=0 transition)
+        # Penalize difference between LastCmd (executed) and U[:, 0] (planned)
+        obj += self.W_steer * (self.U[1, 0] - self.LastCmd[1])**2
+        obj += self.W_acc * (self.U[0, 0] - self.LastCmd[0])**2
+
+        for k in range(1, self.T + 1):
             # State Error
             x_err = self.X[0, k] - self.Ref[0, k]
             y_err = self.X[1, k] - self.Ref[1, k]
@@ -85,15 +96,18 @@ class MPCSolver:
             obj += self.W_vel * v_err**2
             
             # Soft CTE Constraint - Exponential Penalty for violations
-            if 'cte_max' in self.params['constraints']:
-                cte_max = self.params['constraints']['cte_max']
-                position_error = ca.sqrt(x_err**2 + y_err**2)
-                # Smooth penalty that increases exponentially beyond limit
-                cte_penalty = ca.fmax(0, position_error - cte_max)**2
-                obj += 1000.0 * cte_penalty  # Very high penalty weight
+            cte_max = self.params['constraints']['cte_max']
+            ref_yaw = self.Ref[2, k]
+            
+            # Calculate Lateral Error (Cross Track Error)
+            lat_err = -ca.sin(ref_yaw) * x_err + ca.cos(ref_yaw) * y_err
+            
+            # Use absolute lateral error for constraint
+            cte_penalty = ca.fmax(0, ca.fabs(lat_err) - cte_max)**2
+            obj += self.W_cte * cte_penalty
             
             # Control Effort / Smoothness
-            if k > 0:
+            if k < self.T:
                 obj += self.W_steer * (self.U[1, k] - self.U[1, k-1])**2
                 obj += self.W_acc * (self.U[0, k] - self.U[0, k-1])**2
                 
@@ -104,26 +118,18 @@ class MPCSolver:
             # Dynamics
             curr_state = self.X[:, k]
             control_input = self.U[:, k]
-            
-            # Estimate yaw_rate kinematically for the model input
-            # yaw_rate = v * tan(delta) / L
-            L = 1.75
-            v = curr_state[3]
-            delta = control_input[1]
-            yaw_rate = v * ca.tan(delta) / L
-            
-            # Use Neural Network model for all steps
-            next_state_expr = self.vehicle_model.get_next_state(curr_state, yaw_rate, control_input)
-            
-            self.opti.subject_to(self.X[:, k+1] == next_state_expr)
-            
-            # Input Constraints
+
             v_max = self.params['constraints']['v_max']
             delta_max = self.params['constraints']['delta_max']
             
-            self.opti.subject_to(self.opti.bounded(-v_max, self.U[0, k], v_max))
-            self.opti.subject_to(self.opti.bounded(-delta_max, self.U[1, k], delta_max))
+            # Use Neural Network model for all steps
+            # Yaw rate is calculated internally by the model (model encapsulated)
+            next_state_expr = self.vehicle_model.get_next_state(curr_state, control_input)
             
+            self.opti.subject_to(self.X[:, k+1] == next_state_expr) # State Constraint
+            self.opti.subject_to(self.opti.bounded(-v_max, self.U[0, k], v_max)) # Input Constraint
+            self.opti.subject_to(self.opti.bounded(-delta_max, self.U[1, k], delta_max)) # Input Constraint
+                
         # Initial Condition
         self.opti.subject_to(self.X[:, 0] == self.P)
         
@@ -141,18 +147,20 @@ class MPCSolver:
             
         self.opti.solver('ipopt', p_opts, s_opts)
 
-    def solve(self, current_state, reference_trajectory):
+    def solve(self, current_state, reference_trajectory, last_cmd):
         """
         Solve the MPC optimization problem.
         
         :param current_state: [x, y, yaw, v]
         :param reference_trajectory: Shape (4, T+1) -> [x, y, yaw, v]
+        :param last_cmd: [cmd_v, cmd_steer] - Last applied command
         :return: (cmd_v, cmd_steer, solved_successfully)
         """
         try:
             # Set Parameters
             self.opti.set_value(self.P, current_state)
             self.opti.set_value(self.Ref, reference_trajectory)
+            self.opti.set_value(self.LastCmd, last_cmd)
             
             # Warm Start
             self.opti.set_initial(self.X, self.prev_X)
@@ -178,17 +186,21 @@ class MPCSolver:
         except Exception as e:
             rospy.logwarn_throttle(1, f"MPC Solver Failed: {str(e)}")
             
-            # Reset Warm Start on failure (simple prediction)
+            # Reset Warm Start on failure using Reference Trajectory
             x0, y0, th0, v0 = current_state
-            target_speed = self.params.get('target_speed', 5.0)
             
             for k in range(self.T + 1):
-                self.prev_X[0, k] = x0 + v0 * k * self.dt * np.cos(th0)
-                self.prev_X[1, k] = y0 + v0 * k * self.dt * np.sin(th0)
-                self.prev_X[2, k] = th0
-                self.prev_X[3, k] = target_speed
+                # Use Reference Velocity for prediction
+                ref_v = reference_trajectory[3, k] if k < reference_trajectory.shape[1] else 0.0
                 
-            self.prev_U[0, :] = target_speed
+                self.prev_X[0, k] = x0 + ref_v * k * self.dt * np.cos(th0)
+                self.prev_X[1, k] = y0 + ref_v * k * self.dt * np.sin(th0)
+                self.prev_X[2, k] = th0
+                self.prev_X[3, k] = ref_v
+                
+            # Set initial control guess to the first reference velocity
+            first_ref_v = reference_trajectory[3, 0] if reference_trajectory.shape[1] > 0 else 0.0
+            self.prev_U[0, :] = first_ref_v
             self.prev_U[1, :] = 0.0
             
             return 0.0, 0.0, False
