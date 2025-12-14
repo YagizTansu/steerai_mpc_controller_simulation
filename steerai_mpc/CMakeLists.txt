@@ -7,12 +7,6 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   ackermann_msgs
   nav_msgs
-  dynamic_reconfigure
-)
-
-# Generate dynamic reconfigure options
-generate_dynamic_reconfigure_options(
-  cfg/MPCDynamicParams.cfg
 )
 
 catkin_package(

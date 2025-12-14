@@ -14,7 +14,6 @@ This project implements a learning-based Model Predictive Controller (MPC) for t
   - `visualization_msgs`
   - `jsk_rviz_plugins`
   - `tf`
-  - `dynamic_reconfigure`
   - `gem_gazebo` (Simulation environment)
 - **Python Libraries**:
   - `torch` (PyTorch)

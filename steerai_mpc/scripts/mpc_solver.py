@@ -33,18 +33,6 @@ class MPCSolver:
         self.prev_X[3, :] = 0.0
         self.prev_U[0, :] = 0.0
 
-    def update_weights(self, new_weights):
-        """Update cost function weights dynamically."""
-        self.weights.update(new_weights)
-        
-        # Update parameter values in the optimizer
-        self.opti.set_value(self.W_pos, self.weights['position'])
-        self.opti.set_value(self.W_head, self.weights['heading'])
-        self.opti.set_value(self.W_vel, self.weights['velocity'])
-        self.opti.set_value(self.W_steer, self.weights['steering_smooth'])
-        self.opti.set_value(self.W_acc, self.weights['acceleration_smooth'])
-        self.opti.set_value(self.W_cte, self.weights['cte'])
-
     def setup_solver(self):
         """Setup CasADi Opti stack."""
         self.opti = ca.Opti()
