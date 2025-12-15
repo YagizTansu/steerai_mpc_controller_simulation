@@ -58,12 +58,9 @@ def train_model():
     # Inputs: [curr_speed, curr_yaw_rate, cmd_speed, cmd_steering_angle]
     # Targets: [delta_speed, delta_yaw]
     
-    # DOWNSAMPLING: 50Hz -> 10Hz
-    # Take every 5th sample to match MPC dt=0.1s
-    # Data Collector dt = 0.02s (50Hz)
-    # Target dt = 0.10s (10Hz)
-    df = df.iloc[::5].reset_index(drop=True)
-    print(f"Data downsampled to 10Hz. New shape: {df.shape}")
+    # Data is already at 10Hz (dt=0.1s)
+    # No downsampling needed
+    print(f"Data shape: {df.shape}")
     
     # Shift data to get next state
     df['next_speed'] = df['curr_speed'].shift(-1)

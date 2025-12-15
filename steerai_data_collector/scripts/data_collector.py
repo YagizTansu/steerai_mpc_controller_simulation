@@ -58,7 +58,7 @@ class DataCollector:
         # Parameters
         timestamp_str = time.strftime("%Y%m%d-%H%M%S")
         self.log_file_path = os.path.join(data_dir, f'training_data_{timestamp_str}.csv')
-        self.log_frequency = 50.0 # Hz
+        self.log_frequency = 10.0 # Hz
         self.max_speed = 5.5 # m/s
         self.max_steering = 0.6 # rad
         
