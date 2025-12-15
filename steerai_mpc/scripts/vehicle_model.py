@@ -152,6 +152,8 @@ class VehicleModel:
         
         cmd_v = control_input[0]
         cmd_steer = control_input[1]
+
+        curr_yaw_rate = curr_v * np.tan(cmd_steer) / self.wheelbase # kinematic yaw rate
         
         # NN Prediction
         delta_v_pred, delta_yaw_pred = self._neural_net_dynamics_numpy(curr_v, curr_yaw_rate, cmd_v, cmd_steer)

@@ -311,8 +311,7 @@ class MPCController:
             # Solver plans from this predicted state, compensating for actuation delay
             predicted_state = self.vehicle_model.predict_next_state_numpy(
                 self.current_state, 
-                self.last_cmd, 
-                self.current_yaw_rate
+                self.last_cmd
             )
             
             # Transpose to match shape (4, T+1) for solver
