@@ -295,19 +295,11 @@ class MPCController:
                 self.pub_cmd.publish(msg)
                 rate.sleep()
                 continue
-            
-            # Delay Compensation using Neural Network model for consistency
-            # Use the last command sent to predict current state
-            predicted_state = self.vehicle_model.predict_next_state_numpy(
-                self.current_state, 
-                self.current_yaw_rate,
-                self.last_cmd
-            )
-            
+                        
             # Get Reference Trajectory (T+1 points)
             ref_traj = self.path_manager.get_reference(
-                predicted_state[0], 
-                predicted_state[1], 
+                self.current_state[0], 
+                self.current_state[1], 
                 self.T + 1, 
                 self.dt
             )
@@ -316,9 +308,9 @@ class MPCController:
             ref_traj = ref_traj.T
             
             # Solve MPC
-            cmd_v, cmd_steer, success = self.solver.solve(predicted_state, ref_traj, self.last_cmd)
+            cmd_v, cmd_steer, success = self.solver.solve(self.current_state, ref_traj, self.last_cmd)
             
-            # Store command for next delay compensation
+            # Store command for next iteration
             self.last_cmd = np.array([cmd_v, cmd_steer])
             
             # Publish Command

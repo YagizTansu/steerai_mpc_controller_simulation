@@ -19,7 +19,6 @@ This project is a **Model Predictive Control (MPC)** based path tracking system 
 ### Key Features
 - ✅ **Neural Network Dynamics**: Vehicle dynamics model trained with PyTorch
 - ✅ **Nonlinear MPC**: CasADi/IPOPT based optimization
-- ✅ **Delay Compensation**: Prediction mechanism for delay compensation
 - ✅ **Velocity Profile Generation**: Automatic speed profile based on curvature
 - ✅ **Dynamic Reconfigure**: Runtime parameter adjustment
 - ✅ **Real-time Performance**: 10 Hz loop frequency (100ms)
@@ -140,12 +139,6 @@ def run(self):
             self.pub_cmd.publish(msg)
             continue
         
-        # 4. Delay Compensation
-        predicted_state = self.vehicle_model.predict_next_state_numpy(
-            self.current_state, 
-            self.current_yaw_rate,
-            self.last_cmd  # Using previous command
-        )
         
         # 5. Reference Trajectory Generation
         ref_traj = self.path_manager.get_reference(
@@ -172,7 +165,6 @@ def run(self):
 ```
 
 **Critical Points**:
-- **Delay Compensation**: Vehicle state is predicted for the time until command is applied
 - **Horizon**: MPC plans 0.5-2 seconds ahead (T * dt)
 - **Real-time**: Each iteration must complete within 100ms
 
@@ -236,10 +228,6 @@ $$v_{t+1} = v_t + \Delta v$$
 **`_neural_net_dynamics(v, yaw_rate, cmd_v, cmd_steer)`**:
 - **CasADi symbolic** version (used in MPC optimization)
 - Can calculate gradients (automatic differentiation)
-
-**`predict_next_state_numpy(curr_state, current_yaw_rate, control_input)`**:
-- **Numpy** version (used in delay compensation)
-- Faster, only forward pass
 
 **`get_next_state(curr_state, current_yaw_rate, control_input)`**:
 - Returns symbolic expression for MPC solver
@@ -852,7 +840,6 @@ solver:
                                      ▼
                           ┌─────────────────────┐
                           │ vehicle_model.py    │
-                          │ Delay Compensation  │
                           │ (NN Prediction)     │
                           └─────────┬───────────┘
                                      │

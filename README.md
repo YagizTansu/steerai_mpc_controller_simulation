@@ -141,7 +141,6 @@ The controller uses a learned **Neural Network Model** to predict the vehicle's 
 
 - **Model Type**: Feed-Forward Neural Network (MLP)
 - **Integration**: The network predicts the *change* in state ($\Delta v, \Delta \psi$) given the current state and control inputs.
-- **Delay Compensation**: The same neural network is used to predict the vehicle's state after the control delay period, ensuring consistency between prediction and planning.
 
 ### Optimization Problem
 The MPC solves the following optimization problem at 10 Hz with a prediction horizon of **20 steps** (2.0 seconds):
