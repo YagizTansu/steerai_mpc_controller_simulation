@@ -268,6 +268,7 @@ class MPCController:
                 msg.speed = 0.0
                 msg.steering_angle = 0.0
                 self.pub_cmd.publish(msg)
+                self.last_cmd = np.array([0.0, 0.0]) # Reset last command state
                 rate.sleep()
                 continue
 
@@ -293,6 +294,7 @@ class MPCController:
                 msg.speed = 0.0
                 msg.steering_angle = 0.0
                 self.pub_cmd.publish(msg)
+                self.last_cmd = np.array([0.0, 0.0]) # Reset last command state
                 rate.sleep()
                 continue
                         
