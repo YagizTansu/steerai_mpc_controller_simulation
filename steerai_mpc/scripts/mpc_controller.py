@@ -297,7 +297,7 @@ class MPCController:
                 continue
                         
             # Delay Compensation: Predict state at t + dt
-            predicted_state = self.vehicle_model.predict_next_state_numpy(self.current_state, self.last_cmd)
+            predicted_state = self.vehicle_model.predict_next_state_numpy(self.current_state, self.last_cmd, self.current_yaw_rate)
             
             # Get Reference Trajectory (T+1 points) starting from PREDICTED state
             ref_traj = self.path_manager.get_reference(
