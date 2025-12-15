@@ -79,7 +79,8 @@ def train_model():
     
     # 2. Speed delta baseline: (cmd_speed - curr_speed) * K_acc
     # K_acc represents how quickly the vehicle responds to speed commands
-    K_acc = 0.5  # Initial guess, can be tuned
+    # Optimized value from data analysis (see optimize_kacc.py)
+    K_acc = 0.0553  # Optimal value: 95% RMSE reduction vs K_acc=0.5
     df['kinematic_delta_speed'] = (df['cmd_speed'] - df['curr_speed']) * K_acc
     
     # --- COMPUTE RESIDUALS ---

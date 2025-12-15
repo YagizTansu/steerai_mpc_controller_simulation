@@ -9,14 +9,14 @@ import casadi as ca
 import rospy
 
 class VehicleModel:
-    def __init__(self, dt=0.1, wheelbase=1.75, K_acc=0.5):
+    def __init__(self, dt=0.1, wheelbase=1.75, K_acc=0.0553):
         """
         Initialize Vehicle Model.
         Handles loading of Neural Network dynamics and provides symbolic expressions.
         
         :param dt: Time step
         :param wheelbase: Vehicle wheelbase (meters)
-        :param K_acc: Acceleration response factor for kinematic baseline (0-1)
+        :param K_acc: Acceleration response factor for kinematic baseline (optimized: 0.0553)
         """
         self.dt = dt
         self.wheelbase = wheelbase
