@@ -111,3 +111,57 @@ class VehicleModel:
         next_v = curr_v + delta_v_pred # Residual update
         
         return ca.vertcat(next_x, next_y, next_yaw, next_v)
+
+    def _neural_net_dynamics_numpy(self, v, yaw_rate, cmd_v, cmd_steer):
+        """
+        Numpy Neural Network forward pass for fast prediction (no CasADi overhead).
+        Input: scalars
+        Output: delta_v, delta_yaw
+        """
+        # Normalize Input
+        inp = np.array([v, yaw_rate, cmd_v, cmd_steer])
+        inp_norm = (inp - self.mean_X) / self.scale_X
+        
+        # Forward Pass (Softplus: log(1 + exp(x)))
+        h1 = np.dot(self.W1, inp_norm) + self.b1
+        h1 = np.log(1 + np.exp(h1)) # Softplus
+        
+        h2 = np.dot(self.W2, h1) + self.b2
+        h2 = np.log(1 + np.exp(h2)) # Softplus
+        
+        out_norm = np.dot(self.W3, h2) + self.b3
+        
+        # Denormalize Output
+        out = out_norm * self.scale_y + self.mean_y
+        
+        return out[0], out[1]
+
+    def predict_next_state_numpy(self, current_state, control_input):
+        """
+        Predict next state using NumPy (for delay compensation).
+        
+        :param current_state: [x, y, yaw, v]
+        :param control_input: [cmd_v, cmd_steer]
+        :return: [x_next, y_next, yaw_next, v_next]
+        """
+        curr_x = current_state[0]
+        curr_y = current_state[1]
+        curr_yaw = current_state[2]
+        curr_v = current_state[3]
+        
+        cmd_v = control_input[0]
+        cmd_steer = control_input[1]
+        
+        # Kinematic Yaw Rate
+        current_yaw_rate = curr_v * np.tan(cmd_steer) / self.wheelbase
+        
+        # NN Prediction
+        delta_v_pred, delta_yaw_pred = self._neural_net_dynamics_numpy(curr_v, current_yaw_rate, cmd_v, cmd_steer)
+        
+        # State Update
+        next_x = curr_x + curr_v * np.cos(curr_yaw) * self.dt
+        next_y = curr_y + curr_v * np.sin(curr_yaw) * self.dt
+        next_yaw = curr_yaw + delta_yaw_pred
+        next_v = curr_v + delta_v_pred
+        
+        return np.array([next_x, next_y, next_yaw, next_v])

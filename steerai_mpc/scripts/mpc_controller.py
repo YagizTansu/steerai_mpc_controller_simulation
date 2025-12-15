@@ -296,10 +296,13 @@ class MPCController:
                 rate.sleep()
                 continue
                         
-            # Get Reference Trajectory (T+1 points)
+            # Delay Compensation: Predict state at t + dt
+            predicted_state = self.vehicle_model.predict_next_state_numpy(self.current_state, self.last_cmd)
+            
+            # Get Reference Trajectory (T+1 points) starting from PREDICTED state
             ref_traj = self.path_manager.get_reference(
-                self.current_state[0], 
-                self.current_state[1], 
+                predicted_state[0], 
+                predicted_state[1], 
                 self.T + 1, 
                 self.dt
             )
@@ -307,8 +310,8 @@ class MPCController:
             # Transpose to match shape (4, T+1) for solver
             ref_traj = ref_traj.T
             
-            # Solve MPC
-            cmd_v, cmd_steer, success = self.solver.solve(self.current_state, ref_traj, self.last_cmd)
+            # Solve MPC using PREDICTED state
+            cmd_v, cmd_steer, success = self.solver.solve(predicted_state, ref_traj, self.last_cmd)
             
             # Store command for next iteration
             self.last_cmd = np.array([cmd_v, cmd_steer])
