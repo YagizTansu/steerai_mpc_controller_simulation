@@ -297,21 +297,21 @@ class MPCController:
                 self.last_cmd = np.array([0.0, 0.0]) # Reset last command state
                 rate.sleep()
                 continue
-                        
-            # Get Reference Trajectory from CURRENT state (T+1 points)
-            # This maintains correct path geometry and closest point tracking
-            ref_traj = self.path_manager.get_reference(
-                self.current_state[0], 
-                self.current_state[1], 
-                self.T + 1, 
-                self.dt
-            )
             
             # Delay Compensation: Predict where the vehicle will be when command is executed
             # Solver plans from this predicted state, compensating for actuation delay
             predicted_state = self.vehicle_model.predict_next_state_numpy(
                 self.current_state, 
                 self.last_cmd
+            )
+                        
+            # Get Reference Trajectory from PREDICTED state (T+1 points)
+            # This maintains correct path geometry and closest point tracking
+            ref_traj = self.path_manager.get_reference(
+                predicted_state[0], 
+                predicted_state[1], 
+                self.T + 1, 
+                self.dt
             )
             
             # Transpose to match shape (4, T+1) for solver
@@ -336,7 +336,7 @@ class MPCController:
             abs_cte = abs(cte)
             if abs_cte > self.cte_max:
                 self.cte_violations += 1
-                rospy.logwarn_throttle(2, f"⚠️  CTE VIOLATION: {abs_cte:.3f}m > {self.cte_max}m (Total: {self.cte_violations})")
+                rospy.logwarn_throttle(2, f"CTE VIOLATION: {abs_cte:.3f}m > {self.cte_max}m (Total: {self.cte_violations})")
             
             if abs_cte > self.max_cte:
                 self.max_cte = abs_cte
