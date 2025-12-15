@@ -9,16 +9,18 @@ import casadi as ca
 import rospy
 
 class VehicleModel:
-    def __init__(self, dt=0.1, wheelbase=1.75):
+    def __init__(self, dt=0.1, wheelbase=1.75, K_acc=0.5):
         """
         Initialize Vehicle Model.
         Handles loading of Neural Network dynamics and provides symbolic expressions.
         
         :param dt: Time step
         :param wheelbase: Vehicle wheelbase (meters)
+        :param K_acc: Acceleration response factor for kinematic baseline (0-1)
         """
         self.dt = dt
         self.wheelbase = wheelbase
+        self.K_acc = K_acc  # For kinematic baseline in residual learning
         
         # Load Model and Scalers
         self.load_model()
@@ -60,8 +62,9 @@ class VehicleModel:
     def _neural_net_dynamics(self, v, yaw_rate, cmd_v, cmd_steer):
         """
         Symbolic Neural Network forward pass using CasADi.
+        RESIDUAL LEARNING: NN predicts residuals, not full deltas
         Input: [v, yaw_rate, cmd_v, cmd_steer]
-        Output: [delta_v, delta_yaw]
+        Output: [residual_delta_v, residual_delta_yaw]
         """
         # Normalize Input
         inp = ca.vertcat(v, yaw_rate, cmd_v, cmd_steer)
@@ -83,7 +86,8 @@ class VehicleModel:
 
     def get_next_state(self, curr_state, control_input):
         """
-        Returns the symbolic expression for the next state using Neural Network dynamics.
+        Returns the symbolic expression for the next state using RESIDUAL LEARNING.
+        Combines kinematic baseline (physics-based) with NN residual predictions.
         
         :param curr_state: CasADi variable [x, y, yaw, v]
         :param control_input: CasADi variable [cmd_v, cmd_steer]
@@ -101,22 +105,31 @@ class VehicleModel:
         # yaw_rate = v * tan(delta) / L
         current_yaw_rate = curr_v * ca.tan(cmd_steer) / self.wheelbase
         
-        # Neural Network prediction
-        delta_v_pred, delta_yaw_pred = self._neural_net_dynamics(curr_v, current_yaw_rate, cmd_v, cmd_steer)
+        # --- KINEMATIC BASELINE (Physics-based) ---
+        kinematic_delta_yaw = current_yaw_rate * self.dt
+        kinematic_delta_v = (cmd_v - curr_v) * self.K_acc
+        
+        # --- NEURAL NETWORK RESIDUAL PREDICTION ---
+        residual_delta_v, residual_delta_yaw = self._neural_net_dynamics(curr_v, current_yaw_rate, cmd_v, cmd_steer)
+        
+        # --- COMBINE: Physics + Learned Correction ---
+        delta_v_total = kinematic_delta_v + residual_delta_v
+        delta_yaw_total = kinematic_delta_yaw + residual_delta_yaw
             
         # State Update
         next_x = curr_x + curr_v * ca.cos(curr_yaw) * self.dt
         next_y = curr_y + curr_v * ca.sin(curr_yaw) * self.dt
-        next_yaw = curr_yaw + delta_yaw_pred
-        next_v = curr_v + delta_v_pred # Residual update
+        next_yaw = curr_yaw + delta_yaw_total
+        next_v = curr_v + delta_v_total
         
         return ca.vertcat(next_x, next_y, next_yaw, next_v)
 
     def _neural_net_dynamics_numpy(self, v, yaw_rate, cmd_v, cmd_steer):
         """
         Numpy Neural Network forward pass for fast prediction (no CasADi overhead).
+        RESIDUAL LEARNING: NN predicts residuals, not full deltas
         Input: scalars
-        Output: delta_v, delta_yaw
+        Output: residual_delta_v, residual_delta_yaw
         """
         # Normalize Input
         inp = np.array([v, yaw_rate, cmd_v, cmd_steer])
@@ -139,6 +152,7 @@ class VehicleModel:
     def predict_next_state_numpy(self, current_state, control_input, current_yaw_rate=None):
         """
         Predict next state using NumPy (for delay compensation).
+        Uses RESIDUAL LEARNING: kinematic baseline + NN residuals.
         
         :param current_state: [x, y, yaw, v]
         :param control_input: [cmd_v, cmd_steer]
@@ -159,13 +173,21 @@ class VehicleModel:
         else:
             model_input_yaw_rate = current_yaw_rate
         
-        # NN Prediction
-        delta_v_pred, delta_yaw_pred = self._neural_net_dynamics_numpy(curr_v, model_input_yaw_rate, cmd_v, cmd_steer)
+        # --- KINEMATIC BASELINE (Physics-based) ---
+        kinematic_delta_yaw = model_input_yaw_rate * self.dt
+        kinematic_delta_v = (cmd_v - curr_v) * self.K_acc
+        
+        # --- NN RESIDUAL PREDICTION ---
+        residual_delta_v, residual_delta_yaw = self._neural_net_dynamics_numpy(curr_v, model_input_yaw_rate, cmd_v, cmd_steer)
+        
+        # --- COMBINE: Physics + Learned Correction ---
+        delta_v_total = kinematic_delta_v + residual_delta_v
+        delta_yaw_total = kinematic_delta_yaw + residual_delta_yaw
         
         # State Update
         next_x = curr_x + curr_v * np.cos(curr_yaw) * self.dt
         next_y = curr_y + curr_v * np.sin(curr_yaw) * self.dt
-        next_yaw = curr_yaw + delta_yaw_pred
-        next_v = curr_v + delta_v_pred
+        next_yaw = curr_yaw + delta_yaw_total
+        next_v = curr_v + delta_v_total
         
         return np.array([next_x, next_y, next_yaw, next_v])

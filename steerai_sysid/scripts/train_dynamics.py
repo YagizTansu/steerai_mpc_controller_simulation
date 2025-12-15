@@ -55,32 +55,56 @@ def train_model():
     df = pd.read_csv(data_path)
     
     # 2. Feature Engineering
+    # RESIDUAL LEARNING APPROACH:
     # Inputs: [curr_speed, curr_yaw_rate, cmd_speed, cmd_steering_angle]
-    # Targets: [delta_speed, delta_yaw]
+    # Targets: [residual_delta_speed, residual_delta_yaw]
+    # Residual = Actual_Delta - Kinematic_Baseline
     
     # Data is already at 10Hz (dt=0.1s)
-    # No downsampling needed
+    dt = 0.1
     print(f"Data shape: {df.shape}")
     
     # Shift data to get next state
     df['next_speed'] = df['curr_speed'].shift(-1)
     df['next_yaw'] = df['curr_yaw'].shift(-1)
     
-    # Calculate delta_speed
+    # Calculate actual deltas (ground truth)
     df['delta_speed'] = df['next_speed'] - df['curr_speed']
-
-    # Calculate delta_yaw (handle wrapping if necessary, but for small steps simple diff is usually ok)
-    # For robust wrapping: (angle + pi) % (2*pi) - pi
-    # Calculate delta_yaw with robust wrapping
-    # (angle + pi) % (2*pi) - pi
     diff = df['next_yaw'] - df['curr_yaw']
     df['delta_yaw'] = (diff + np.pi) % (2 * np.pi) - np.pi
+    
+    # --- KINEMATIC BASELINE CALCULATIONS ---
+    # 1. Yaw delta baseline: yaw_rate * dt
+    df['kinematic_delta_yaw'] = df['curr_yaw_rate'] * dt
+    
+    # 2. Speed delta baseline: (cmd_speed - curr_speed) * K_acc
+    # K_acc represents how quickly the vehicle responds to speed commands
+    K_acc = 0.5  # Initial guess, can be tuned
+    df['kinematic_delta_speed'] = (df['cmd_speed'] - df['curr_speed']) * K_acc
+    
+    # --- COMPUTE RESIDUALS ---
+    # Residual = Actual - Kinematic
+    df['residual_delta_speed'] = df['delta_speed'] - df['kinematic_delta_speed']
+    df['residual_delta_yaw'] = df['delta_yaw'] - df['kinematic_delta_yaw']
     
     # Drop last row (NaN due to shift)
     df = df.dropna()
     
+    # --- DATA ANALYSIS: Verify Kinematic Baseline Quality ---
+    print("\n=== Kinematic Baseline Analysis ===")
+    print(f"Delta Speed - Mean: {df['delta_speed'].mean():.4f}, Std: {df['delta_speed'].std():.4f}")
+    print(f"Kinematic Baseline Speed - Mean: {df['kinematic_delta_speed'].mean():.4f}, Std: {df['kinematic_delta_speed'].std():.4f}")
+    print(f"Residual Speed - Mean: {df['residual_delta_speed'].mean():.4f}, Std: {df['residual_delta_speed'].std():.4f}")
+    print(f"\nDelta Yaw - Mean: {df['delta_yaw'].mean():.4f}, Std: {df['delta_yaw'].std():.4f}")
+    print(f"Kinematic Baseline Yaw - Mean: {df['kinematic_delta_yaw'].mean():.4f}, Std: {df['kinematic_delta_yaw'].std():.4f}")
+    print(f"Residual Yaw - Mean: {df['residual_delta_yaw'].mean():.4f}, Std: {df['residual_delta_yaw'].std():.4f}")
+    print(f"\nResidual/Full Delta Ratio (Speed): {df['residual_delta_speed'].std() / df['delta_speed'].std():.2%}")
+    print(f"Residual/Full Delta Ratio (Yaw): {df['residual_delta_yaw'].std() / df['delta_yaw'].std():.2%}")
+    print("=" * 40)
+    
+    # Prepare training data - NOW USING RESIDUALS AS TARGETS
     X = df[['curr_speed', 'curr_yaw_rate', 'cmd_speed', 'cmd_steering_angle']].values
-    y = df[['delta_speed', 'delta_yaw']].values
+    y = df[['residual_delta_speed', 'residual_delta_yaw']].values
     
     # 3. Preprocessing
     scaler_X = StandardScaler()
@@ -153,8 +177,10 @@ def train_model():
     rmse_speed = np.sqrt(mean_squared_error(y_val_real[:, 0], y_pred_real[:, 0]))
     rmse_yaw = np.sqrt(mean_squared_error(y_val_real[:, 1], y_pred_real[:, 1]))
     
-    print(f"Validation RMSE Speed: {rmse_speed:.4f} m/s")
-    print(f"Validation RMSE Delta Yaw: {rmse_yaw:.4f} rad")
+    print(f"\n=== Validation Results (Residual Prediction) ===")
+    print(f"Residual RMSE Speed: {rmse_speed:.4f} m/s")
+    print(f"Residual RMSE Delta Yaw: {rmse_yaw:.4f} rad")
+    print("=" * 40)
     
     # Plotting
     plt.figure(figsize=(15, 5))
@@ -168,23 +194,23 @@ def train_model():
     plt.legend()
     plt.title('Training vs Validation Loss')
     
-    # Plot 2: Speed Prediction
+    # Plot 2: Residual Speed Prediction
     plt.subplot(1, 3, 2)
-    plt.plot(y_val_real[:100, 0], label='Ground Truth')
-    plt.plot(y_pred_real[:100, 0], label='Predicted')
+    plt.plot(y_val_real[:100, 0], label='Ground Truth', alpha=0.7)
+    plt.plot(y_pred_real[:100, 0], label='Predicted', alpha=0.7)
     plt.xlabel('Sample')
-    plt.ylabel('Speed (m/s)')
+    plt.ylabel('Residual Speed (m/s)')
     plt.legend()
-    plt.title('Speed Prediction (First 100 samples)')
+    plt.title('Residual Speed Prediction')
     
-    # Plot 3: Delta Yaw Prediction
+    # Plot 3: Residual Delta Yaw Prediction
     plt.subplot(1, 3, 3)
-    plt.plot(y_val_real[:100, 1], label='Ground Truth')
-    plt.plot(y_pred_real[:100, 1], label='Predicted')
+    plt.plot(y_val_real[:100, 1], label='Ground Truth', alpha=0.7)
+    plt.plot(y_pred_real[:100, 1], label='Predicted', alpha=0.7)
     plt.xlabel('Sample')
-    plt.ylabel('Delta Yaw (rad)')
+    plt.ylabel('Residual Delta Yaw (rad)')
     plt.legend()
-    plt.title('Delta Yaw Prediction (First 100 samples)')
+    plt.title('Residual Yaw Prediction')
     
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'training_results.png'))
