@@ -22,10 +22,6 @@ class VehicleModel:
         
         # Load Model and Scalers
         self.load_model()
-        
-    def update_params(self, dt=None):
-        """Update parameters dynamically."""
-        if dt is not None: self.dt = dt
 
     def load_model(self):
         """Load PyTorch model and scalers from steerai_sysid package."""
