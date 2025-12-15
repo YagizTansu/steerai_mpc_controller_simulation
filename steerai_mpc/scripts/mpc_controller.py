@@ -298,21 +298,21 @@ class MPCController:
                 rate.sleep()
                 continue
                         
-            # Get Reference Trajectory from CURRENT state (T+1 points)
-            # This maintains correct path geometry and closest point tracking
-            ref_traj = self.path_manager.get_reference(
-                self.current_state[0], 
-                self.current_state[1], 
-                self.T + 1, 
-                self.dt
-            )
-            
             # Delay Compensation: Predict where the vehicle will be when command is executed
             # Solver plans from this predicted state, compensating for actuation delay
             predicted_state = self.vehicle_model.predict_next_state_numpy(
                 self.current_state, 
-                self.last_cmd, 
+                self.last_cmd,
                 self.current_yaw_rate
+            )
+
+            # Get Reference Trajectory from PREDICTED state (T+1 points)
+            # This maintains correct path geometry and closest point tracking relative to where the car WILL BE
+            ref_traj = self.path_manager.get_reference(
+                predicted_state[0], 
+                predicted_state[1], 
+                self.T + 1, 
+                self.dt
             )
             
             # Transpose to match shape (4, T+1) for solver
