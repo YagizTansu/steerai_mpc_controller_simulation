@@ -136,7 +136,7 @@ class VehicleModel:
         
         return out[0], out[1]
 
-    def predict_next_state_numpy(self, current_state, control_input, current_yaw_rate=None):
+    def predict_next_state_numpy(self, current_state, control_input):
         """
         Predict next state using NumPy (for delay compensation).
         
@@ -153,14 +153,8 @@ class VehicleModel:
         cmd_v = control_input[0]
         cmd_steer = control_input[1]
         
-        # Use measured yaw rate if available, otherwise kinematic approximation
-        if current_yaw_rate is None:
-            model_input_yaw_rate = curr_v * np.tan(cmd_steer) / self.wheelbase
-        else:
-            model_input_yaw_rate = current_yaw_rate
-        
         # NN Prediction
-        delta_v_pred, delta_yaw_pred = self._neural_net_dynamics_numpy(curr_v, model_input_yaw_rate, cmd_v, cmd_steer)
+        delta_v_pred, delta_yaw_pred = self._neural_net_dynamics_numpy(curr_v, curr_yaw_rate, cmd_v, cmd_steer)
         
         # State Update
         next_x = curr_x + curr_v * np.cos(curr_yaw) * self.dt
