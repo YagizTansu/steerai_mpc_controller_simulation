@@ -1,0 +1,45 @@
+### ekf_se_map: Filters.
+# Config for Extended Kalman Filter (Map Frame)
+frequency: 30
+sensor_timeout: 0.1
+two_d_mode: true
+transform_time_offset: 0.0
+transform_timeout: 0.1
+print_diagnostics: true
+debug: false
+
+map_frame: world
+odom_frame: odom
+base_link_frame: base_footprint
+world_frame: world
+
+# Wheel Odometry (Twist only - typically reliable for velocity)
+odom0: /gem/base_footprint/odom
+odom0_config: [false, false, false, # X, Y, Z
+               false, false, false, # R, P, Yaw
+               true,  true,  false, # dX, dY, dZ
+               false, false, true,  # dR, dP, dYaw
+               false, false, false] # ddX, ddY, ddZ
+odom0_differential: false
+odom0_relative: false
+
+# IMU
+imu0: /gem/imu
+imu0_config: [false, false, false,
+              true,  true,  true,
+              false, false, false,
+              true,  true,  true,
+              true,  true,  true]
+imu0_differential: false
+imu0_relative: true
+imu0_remove_gravitational_acceleration: true
+
+# GPS (via navsat_transform_node which publishes /odometry/gps)
+odom1: /odometry/gps
+odom1_config: [true,  true,  false,
+               false, false, false,
+               false, false, false,
+               false, false, false,
+               false, false, false]
+odom1_differential: false
+odom1_relative: false
