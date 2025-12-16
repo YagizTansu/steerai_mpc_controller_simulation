@@ -1,0 +1,32 @@
+<launch>
+  <!-- Topics -->
+  <arg name="output_final_position_topic" default="/odometry/filtered/global"/>
+  <arg name="output_local_position_topic" default="/odometry/filtered/local"/>
+
+  <!-- NavSat Transform: Converts GPS (Lat/Lon) to Odometry (X/Y) -->
+  <node pkg="robot_localization" type="navsat_transform_node" name="navsat_transform_node" respawn="true">
+    <param name="frequency" value="30"/>
+    <param name="magnetic_declination_radians" value="0"/>
+    <param name="broadcast_cartesian_transform" value="false"/> <!-- Global EKF handles world->odom TF -->
+    <param name="wait_for_datum" value="false"/>
+    <param name="publish_filtered_gps" value="true"/>
+    
+    <remap from="/imu/data" to="/gem/imu" />
+    <remap from="/gps/fix" to="/gem/gps/fix" />
+    <remap from="/odometry/filtered" to="$(arg output_local_position_topic)" /> 
+  </node>
+
+  <!-- Local EKF: Fuses Odom + IMU -->
+  <!-- Publishes odom -> base_footprint TF -->
+  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_local" clear_params="true">
+    <rosparam command="load" file="$(find steerai_localization)/config/ekf_local.yaml" />
+    <remap from="odometry/filtered" to="$(arg output_local_position_topic)"/>
+  </node>
+
+  <!-- Global EKF: Fuses Odom + IMU + GPS -->
+  <!-- Publishes world -> odom TF -->
+  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_global" clear_params="true">
+    <rosparam command="load" file="$(find steerai_localization)/config/ekf_params.yaml" />
+    <remap from="odometry/filtered" to="$(arg output_final_position_topic)"/>
+  </node>
+</launch>

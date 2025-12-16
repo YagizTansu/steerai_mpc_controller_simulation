@@ -1,10 +1,12 @@
-### ekf_se_map: Filters.
+### ekf_global: Filters.
 # Config for Extended Kalman Filter (Map Frame)
+# This filter fuses Global data (GPS + Odom + IMU) to provide the world -> odom transform.
+
 frequency: 30
 sensor_timeout: 0.1
 two_d_mode: true
 transform_time_offset: 0.0
-transform_timeout: 0.1
+transform_timeout: 0.0
 print_diagnostics: true
 debug: false
 
