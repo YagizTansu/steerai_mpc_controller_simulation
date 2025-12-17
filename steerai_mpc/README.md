@@ -685,13 +685,18 @@ $$\min_{\mathbf{X}, \mathbf{U}} J(\mathbf{X}, \mathbf{U})$$
 4. $|\delta| \leq \delta_{\max}$
 
 **Cost Function**:
-$$J = \sum_{k=0}^{T-1} \left[ \mathbf{q}^T \mathbf{e}_k + \mathbf{r}^T \Delta\mathbf{u}_k \right]$$
+$$J = \sum_{k=0}^{T-1} \left[ \mathbf{q}^T \mathbf{e}_k + \mathbf{r}^T \Delta\mathbf{u}_k + w_{\text{cte}} \cdot J_{\text{cte}, k} \right]$$
 
 Where:
 - $\mathbf{e}_k$: State error vector
 - $\Delta\mathbf{u}_k = \mathbf{u}_k - \mathbf{u}_{k-1}$: Control change
 - $\mathbf{q} = [w_{\text{pos}}, w_{\text{head}}, w_{\text{vel}}]$: State weights
 - $\mathbf{r} = [w_{\text{acc}}, w_{\text{steer}}]$: Control smoothing weights
+
+**Soft CTE Constraint Term**:
+$$J_{\text{cte}, k} = \max(0, |\text{lat\_err}_k| - \text{cte}_{\max})^2$$
+- Penalizes violations of the maximum cross-track error ($\text{cte}_{\max}$) quadratically.
+- $\text{lat\_err}_k = -\sin(\theta_{\text{ref},k}) (x_k - x_{\text{ref},k}) + \cos(\theta_{\text{ref},k}) (y_k - y_{\text{ref},k})$
 
 ### Curvature and Velocity Relationship:
 
@@ -713,10 +718,12 @@ $$a_{\text{lat}} = v^2 \kappa \leq a_{\text{lat,max}}$$
 | Parameter | Value | Unit | Description |
 |-----------|-------|------|-------------|
 | **Vehicle** | | | |
-| `v_max` | 5.56 | m/s | Maximum velocity (20 km/h) |
+| `v_max` | 5.40 | m/s | Maximum velocity (~19.4 km/h) |
 | `delta_max` | 0.6 | rad | Maximum steering angle (34°) |
+| `cte_max` | 1.0 | m | Max Cross Track Error (Soft Constraint) |
+| `wheelbase` | 1.75 | m | Vehicle Wheelbase |
 | **MPC** | | | |
-| `horizon` | 25 | steps | Prediction horizon (2.5s) |
+| `horizon` | 15 | steps | Prediction horizon (1.5s) |
 | `dt` | 0.1 | s | Time step |
 | **Weights** | | | |
 | `weight_position` | 6.0 | - | Position error weight |
@@ -724,14 +731,15 @@ $$a_{\text{lat}} = v^2 \kappa \leq a_{\text{lat,max}}$$
 | `weight_velocity` | 0.5 | - | Velocity error weight |
 | `weight_steering_smooth` | 80.0 | - | Steering smoothing |
 | `weight_acceleration_smooth` | 5.0 | - | Acceleration smoothing |
+| `weight_cte` | 1000.0 | - | Soft CTE Constraint Penalty |
 | **Solver** | | | |
-| `max_iter` | 300 | - | Maximum iterations |
-| `tol` | 0.5 | - | Optimality tolerance |
-| `acceptable_tol` | 0.8 | - | Acceptable tolerance |
+| `max_iter` | 150 | - | Maximum iterations |
+| `tol` | 1.0 | - | Optimality tolerance (Highly relaxed for speed) |
+| `acceptable_tol` | 1.0 | - | Acceptable tolerance |
 | `acceptable_iter` | 1 | - | Iterations for acceptance |
-| `max_cpu_time` | 0.098 | s | Maximum solution time |
+| `max_cpu_time` | 0.095 | s | Maximum solution time (95ms) |
 | **Control** | | | |
-| `target_speed` | 5.56 | m/s | Target cruise speed |
+| `target_speed` | 5.2 | m/s | Target cruise speed |
 | `goal_tolerance` | 0.5 | m | Goal reaching tolerance |
 | `loop_rate` | 10 | Hz | Control loop frequency |
 
