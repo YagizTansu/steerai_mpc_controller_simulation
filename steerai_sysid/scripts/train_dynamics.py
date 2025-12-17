@@ -58,10 +58,6 @@ def train_model():
     # Inputs: [curr_speed, curr_yaw_rate, cmd_speed, cmd_steering_angle]
     # Targets: [delta_speed, delta_yaw]
     
-    # Data is already at 10Hz (dt=0.1s)
-    # No downsampling needed
-    print(f"Data shape: {df.shape}")
-    
     # Shift data to get next state
     df['next_speed'] = df['curr_speed'].shift(-1)
     df['next_yaw'] = df['curr_yaw'].shift(-1)
@@ -70,9 +66,6 @@ def train_model():
     df['delta_speed'] = df['next_speed'] - df['curr_speed']
 
     # Calculate delta_yaw (handle wrapping if necessary, but for small steps simple diff is usually ok)
-    # For robust wrapping: (angle + pi) % (2*pi) - pi
-    # Calculate delta_yaw with robust wrapping
-    # (angle + pi) % (2*pi) - pi
     diff = df['next_yaw'] - df['curr_yaw']
     df['delta_yaw'] = (diff + np.pi) % (2 * np.pi) - np.pi
     

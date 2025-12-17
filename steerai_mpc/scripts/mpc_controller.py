@@ -133,8 +133,6 @@ class MPCController:
         self.goal_tolerance = rospy.get_param(param_ns + 'control/goal_tolerance', 0.5)
         self.loop_rate = rospy.get_param(param_ns + 'control/loop_rate', 10)
 
-
-
     def odom_callback(self, msg):
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
